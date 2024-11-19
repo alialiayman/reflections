@@ -49,3 +49,10 @@
 بالتوك
 تيك توك
 ومنصات الكتب
+
+بالإضافة إلى Apple Bookstore  مثل
+	1.	Amazon Kindle Direct Publishing (KDP):Kindle.
+	2.	Smashwords: 
+	3.	Google Play Books: Android.
+	4.	Barnes & Noble Press: Nook للكتب الإلكترونية.
+	5.	Kobo Writing Life: 
