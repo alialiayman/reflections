@@ -70,11 +70,17 @@
 تيك توك
 ومنصات الكتب مثل منصه ابل للكتب وكندل وسماش وردز وجوووجل بلاي بوك وبارنز اند نوبل ونوك وكوبو رايتنج لايف كما انوي دعوه الباحثين للتعليق والاشتراك في عمل مشروع بالذكآء االصناعي لتدريب محرك ذكآء للإجابه باللسان العربي وتجاهل التراث تماما. اخوتي واحبآئي
 [- د. احمد صبحي منصور](https://www.youtube.com/@DrAhmedSubhyMansourAhlAlquran)
+
 [- محمود محمد بكر](https://www.youtube.com/@Mahmoudmbakar)
+
 [- أ حسين الخليل](https://www.youtube.com/@husseinalkhalil)
+
 [- أ سامر الاسلامبولي](https://www.youtube.com/@Samerislamboli)
+
 [- أ خليد بن عكراش](https://www.youtube.com/@%D8%A8%D9%86%D8%B9%D9%83%D8%B1%D8%A7%D8%B4%D9%84%D9%82%D9%88%D9%85%D9%8A%D8%B9%D9%82%D9%84%D9%88%D9%86)
+
 [- أ عبد الغني بن عوده](https://www.youtube.com/@abdelghanibenaouda2116)
+
 [- أ عدنان الرفاعي](https://www.youtube.com/@adnan-alrefaei)
 
 [الرابط](https://github.com/alialiayman/reflections)
