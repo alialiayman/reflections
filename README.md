@@ -82,6 +82,8 @@
 
 [- أ عبد الغني بن عوده](https://www.youtube.com/@abdelghanibenaouda2116)
 
+[- ياسر العديرقاوي ]()
+
 [- أ عدنان الرفاعي](https://www.youtube.com/@adnan-alrefaei)
 
 [الرابط](https://github.com/alialiayman/reflections)
