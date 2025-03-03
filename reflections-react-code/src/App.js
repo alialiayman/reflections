@@ -1,4 +1,4 @@
-import './App.css';
+import Main from "./components/main";
 
 function App() {
   return (
@@ -6,6 +6,7 @@ function App() {
       <header className="App-header">
         <title>My reflections</title>
       </header>
+      <Main />
     </div>
   );
 }

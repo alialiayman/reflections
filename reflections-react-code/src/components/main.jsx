@@ -1,11 +1,9 @@
-import React from "react";
+import DisplayReadme from "./display-readme";
 
 export default function Main() {
     return (
-        <div className="App">
-        <header className="App-header">
-            <title>My reflections</title>
-        </header>
+        <div >
+            <DisplayReadme path="/" />
         </div>
     );
-    }
+}
