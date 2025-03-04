@@ -12,6 +12,7 @@ const DisplayReadme = ({ path }) => {
     useEffect(() => {
         if (path) {
             const url = `${GITHUB}${path === "/" ? path : path + "/"}README.md`;
+            console.log(url);
             axios.get(url, { responseType: 'text' })
                 .then((response) => {
                     console.log(response.headers)
