@@ -1,0 +1,10 @@
+{
+  "hosting": {
+    "public": "reflections-react-code/build",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ]
+  }
+}

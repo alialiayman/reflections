@@ -1,38 +1,40 @@
+import { Typography } from '@mui/material';
+import axios from 'axios';
 import React, { useEffect, useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { GITHUB } from '../constants';
-const DisplayReadme = ({path}) => {
-  const [readme, setReadme] = useState('');
-  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (path) {
-      const url = `${GITHUB}${path}README.md`;
-      console.log(url);
-      fetch(url)
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error('README.md not found');
-          }
-          return response.text();
-        })
-        .then((data) => setReadme(data))
-        .catch((err) => setError(err.message));
-    } else {
-      setError('No path provided');
-    }
-  }, [path]);
+const DisplayReadme = ({ path }) => {
+    const [readme, setReadme] = useState('');
+    const [error, setError] = useState(null);
 
-  return (
-    <div className="container p-4">
-      {error ? (
-        <div className="text-red-500">{error}</div>
-      ) : (
-        <pre className="whitespace-pre-wrap bg-gray-100 p-4 rounded-md">
-          {readme}
-        </pre>
-      )}
-    </div>
-  );
+    useEffect(() => {
+        if (path) {
+            const url = `${GITHUB}${path === "/" ? path : path + "/"}README.md`;
+            axios.get(url, { responseType: 'text' })
+                .then((response) => {
+                    console.log(response.headers)
+                    console.log(response);
+                    setReadme(response.data);
+                })
+                .catch((err) => setError('README.md not found'));
+        } else {
+            setError('No path provided');
+        }
+    }, [path]);
+
+    return (
+        <div>
+            {error ? (
+                <Typography color="error">{error}</Typography>
+            ) : (
+                <div>
+                    <Markdown remarkPlugins={[remarkGfm]}>{readme}</Markdown>
+                </div>
+            )}
+        </div>
+    );
 };
 
 export default DisplayReadme;
