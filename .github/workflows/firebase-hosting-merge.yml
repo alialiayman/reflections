@@ -18,3 +18,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_A_REFLECTIONS }}
           channelId: live
           projectId: a-reflections
+          workingDirectory: reflections-react-code
