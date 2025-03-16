@@ -31,7 +31,7 @@ const Header = ({ handleCopy, copied, images, handleClickOpen }) => {
           </IconButton>
           <IconButton
             color="inherit"
-            href={`https://github.com/alialiayman/reflections${path === "/" ? "" : path}`}
+            href={`https://github.com/alialiayman/reflections${path === "/" ? "" : "/tree/main" + path}`}
             target="_blank"
             aria-label="GitHub"
           >
