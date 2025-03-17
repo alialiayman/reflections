@@ -77,7 +77,7 @@
 
 [- د. احمد صبحي منصور](https://www.youtube.com/@DrAhmedSubhyMansourAhlAlquran)
 
-[- محمود محمد بكر](https://www.youtube.com/@Mahmoudmbakar)
+[- أ محمود محمد بكر](https://www.youtube.com/@Mahmoudmbakar)
 
 [- أ حسين الخليل](https://www.youtube.com/@husseinalkhalil)
 
@@ -87,7 +87,7 @@
 
 [- أ عبد الغني بن عوده](https://www.youtube.com/@abdelghanibenaouda2116)
 
-[- ياسر العديرقاوي ]()
+[- أ ياسر العديرقاوي ](https://www.youtube.com/@Yasir-3drgawy)
 
 [- أ عدنان الرفاعي](https://www.youtube.com/@adnan-alrefaei)
 
