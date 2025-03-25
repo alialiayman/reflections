@@ -1,3 +1,9 @@
+Restructure
+Speak about psyche as referenced in the quran and show its components
+Akl, fouad, kalb, etc....
+
+Reference diseases like narcissism, on the side mention ways to overcome it from quran and sciense
+
 # النرجسية بين الكفر والنفاق في ضوء القرآن
 
 ## مقدمه
