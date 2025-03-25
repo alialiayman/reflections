@@ -10,7 +10,7 @@ import {
   Typography,
 } from "@mui/material";
 
-const Header = ({ handleCopy, copied, images, handleClickOpen }) => {
+const Header = ({ handleCopy, copied, images, handleClickOpen, copyIndex, textChunks }) => {
   const path = window.location.pathname;
   const handleTranslate = () => {
     const url = `https://a--reflections-web-app.translate.goog${path === "/" ? "" : path}?_x_tr_sl=ar&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wapp`;
@@ -50,7 +50,7 @@ const Header = ({ handleCopy, copied, images, handleClickOpen }) => {
               {!copied ? (
                 <ContentCopyIcon />
               ) : (
-                <Typography variant="body">Copied</Typography>
+                <Typography variant="body">{`Copied ${copyIndex}/${textChunks.length}`}</Typography>
               )}
             </Tooltip>
           </IconButton>
