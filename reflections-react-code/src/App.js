@@ -1,5 +1,6 @@
 import { Container, Dialog } from "@mui/material";
 import { useEffect, useState } from "react";
+import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
 
