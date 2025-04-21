@@ -14,14 +14,15 @@
 }
 
 img {
-  max-width: 75%;
+  max-width: 45%;
   float: left;
 }
 
 /* Mobile styles */
 @media (max-width: 768px) {
   img {
-    max-width: 100vw;
+    max-width: 90vw;
+    margin: 0 auto;
   }
 }
 
