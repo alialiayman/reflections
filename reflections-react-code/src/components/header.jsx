@@ -10,10 +10,19 @@ import {
   Typography,
 } from "@mui/material";
 
-const Header = ({ handleCopy, copied, images, handleClickOpen, copyIndex, textChunks }) => {
+const Header = ({
+  handleCopy,
+  copied,
+  images,
+  handleClickOpen,
+  copyIndex,
+  textChunks,
+}) => {
   const path = window.location.pathname;
   const handleTranslate = () => {
-    const url = `https://a--reflections-web-app.translate.goog${path === "/" ? "" : path}?_x_tr_sl=ar&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wapp`;
+    const url = `https://a--reflections-web-app.translate.goog${
+      path === "/" ? "" : path
+    }?_x_tr_sl=ar&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wapp`;
     window.open(url, "_blank");
   };
 
@@ -22,8 +31,8 @@ const Header = ({ handleCopy, copied, images, handleClickOpen, copyIndex, textCh
       position="sticky"
       sx={{ backgroundColor: "#1B4D3E", color: "#A4B494" }}
     >
-      <Toolbar className="flex justify-between">
-        <div className="flex items-center gap-4">
+      <Toolbar >
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", maxWidth: "20vw", justifyContent: "flex-end" }}>
           <IconButton color="inherit" href="/" aria-label="home">
             <Tooltip title="Home">
               <HomeIcon />
@@ -31,7 +40,9 @@ const Header = ({ handleCopy, copied, images, handleClickOpen, copyIndex, textCh
           </IconButton>
           <IconButton
             color="inherit"
-            href={`https://github.com/alialiayman/reflections${path === "/" ? "" : "/tree/main" + path}`}
+            href={`https://github.com/alialiayman/reflections${
+              path === "/" ? "" : "/tree/main" + path
+            }`}
             target="_blank"
             aria-label="GitHub"
           >
@@ -39,8 +50,6 @@ const Header = ({ handleCopy, copied, images, handleClickOpen, copyIndex, textCh
               <GitHubIcon />
             </Tooltip>
           </IconButton>
-        </div>
-        <div className="flex items-center gap-4">
           <IconButton
             color="inherit"
             onClick={handleCopy}
@@ -64,14 +73,16 @@ const Header = ({ handleCopy, copied, images, handleClickOpen, copyIndex, textCh
             </Tooltip>
           </IconButton>
         </div>
+
         <div
           style={{
+            maxWidth: "75vw",
+            padding: "0 16px",
+            marginRight: "4rem",
             display: "flex",
             gap: "8px",
-            alignItems: "center",
-            justifyContent: "flex-end",
-            flexWrap: "nowrap",
-            flexGrow: 1,
+            justifyContent: "flex-start",
+            overflowX: 'scroll'
           }}
         >
           {images.map((image, index) => (
