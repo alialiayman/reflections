@@ -99,22 +99,9 @@ function App() {
 
   const handleDownloadPdf = async () => {
     const fileName = path.split("/").filter(Boolean).pop() || "reflections";
-    const element = document.getElementById("readme"); // Wrap your article with this ID
+    const element = document.getElementById("readme");
     if (!element) return;
-    const images = element.querySelectorAll("img");
-    const imageLoadPromises = Array.from(images).map(
-      (img) =>
-        new Promise((resolve) => {
-          if (img.complete) {
-            resolve();
-          } else {
-            img.onload = () => resolve();
-            img.onerror = () => resolve(); // Still resolve to avoid blocking
-          }
-        })
-    );
 
-    await Promise.all(imageLoadPromises);
     import("html2pdf.js").then(({ default: html2pdf }) => {
       html2pdf()
         .from(element)
@@ -122,13 +109,17 @@ function App() {
           margin: 0.5,
           filename: `${fileName}.pdf`,
           image: { type: "jpeg", quality: 0.98 },
-          html2canvas: { scale: 2 },
-          useCORS: true, // 🔥 This tells html2canvas to try loading cross-origin images
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            allowTaint: false,
+          },
           jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
         })
         .save();
     });
   };
+  
   const handleClickOpen = (image) => {
     setSelectedImage(image);
     setOpen(true);
