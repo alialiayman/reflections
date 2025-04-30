@@ -83,6 +83,7 @@ function App() {
 
     if (copyIndex >= textChunks.length) {
       alert("All text has been copied!");
+      setCopyIndex(0); // Reset index to allow copying again
       return;
     }
 
