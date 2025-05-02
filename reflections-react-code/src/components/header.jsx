@@ -2,7 +2,6 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import HomeIcon from "@mui/icons-material/Home";
 import TranslateIcon from "@mui/icons-material/Translate";
-import DownloadIcon from "@mui/icons-material/Download";
 import {
   AppBar,
   IconButton,
@@ -15,7 +14,6 @@ import {
 
 const Header = ({
   handleCopy,
-  handleDownloadPdf,
   copied,
   images,
   handleClickOpen,
@@ -43,6 +41,18 @@ const Header = ({
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
             <IconButton
               color="inherit"
+              href={`https://github.com/alialiayman/reflections${
+                path === "/" ? "" : "/tree/main" + path
+              }`}
+              target="_blank"
+              aria-label="GitHub"
+            >
+              <Tooltip title="GitHub">
+                <GitHubIcon />
+              </Tooltip>
+            </IconButton>
+            <IconButton
+              color="inherit"
               onClick={handleCopy}
               aria-label="Copy to Clipboard"
             >
@@ -54,15 +64,7 @@ const Header = ({
                 )}
               </Tooltip>
             </IconButton>
-            <IconButton
-              color="inherit"
-              onClick={handleDownloadPdf}
-              aria-label="Download PDF"
-            >
-              <Tooltip title="Download as PDF">
-                <DownloadIcon />
-              </Tooltip>
-            </IconButton>
+
             <IconButton
               color="inherit"
               aria-label="Translate"
@@ -98,15 +100,6 @@ const Header = ({
               >
                 <Tooltip title="GitHub">
                   <GitHubIcon />
-                </Tooltip>
-              </IconButton>
-              <IconButton
-                color="inherit"
-                onClick={handleDownloadPdf}
-                aria-label="Download PDF"
-              >
-                <Tooltip title="Download as PDF">
-                  <DownloadIcon />
                 </Tooltip>
               </IconButton>
               <IconButton

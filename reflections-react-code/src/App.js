@@ -97,28 +97,6 @@ function App() {
       .catch((err) => console.error("Failed to copy:", err));
   };
 
-  const handleDownloadPdf = async () => {
-    const fileName = path.split("/").filter(Boolean).pop() || "reflections";
-    const element = document.getElementById("readme");
-    if (!element) return;
-
-    import("html2pdf.js").then(({ default: html2pdf }) => {
-      html2pdf()
-        .from(element)
-        .set({
-          margin: 0.5,
-          filename: `${fileName}.pdf`,
-          image: { type: "jpeg", quality: 0.98 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            allowTaint: false,
-          },
-          jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
-        })
-        .save();
-    });
-  };
   
   const handleClickOpen = (image) => {
     setSelectedImage(image);
@@ -134,7 +112,6 @@ function App() {
     <>
       <Header
         handleCopy={handleCopy}
-        handleDownloadPdf={handleDownloadPdf}
         copied={copied}
         copyIndex={copyIndex}
         textChunks={textChunks}
