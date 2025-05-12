@@ -111,6 +111,7 @@ function App() {
   return (
     <>
       <Header
+        id="web-header"
         handleCopy={handleCopy}
         copied={copied}
         copyIndex={copyIndex}
@@ -118,9 +119,11 @@ function App() {
         images={images}
         handleClickOpen={handleClickOpen}
       />
+      <div id="print-header" style={{display: 'none'}}></div>
       <Container p={2} mt={2}>
         <Main />
       </Container>
+      <div id="print-footer" style={{display: 'none'}}></div>
 
       {/* Modal for Enlarged Image */}
       <Dialog open={open} onClose={handleClose}>

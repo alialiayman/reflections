@@ -19,6 +19,7 @@ const Header = ({
   handleClickOpen,
   copyIndex,
   textChunks,
+  ...props
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -35,6 +36,7 @@ const Header = ({
     <AppBar
       position="sticky"
       sx={{ backgroundColor: "#1B4D3E", color: "#A4B494" }}
+      {...props}
     >
       <Toolbar sx={{ justifyContent: isMobile ? "center" : "space-between" }}>
         {isMobile ? (
