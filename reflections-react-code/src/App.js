@@ -4,7 +4,15 @@ import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
 
-const COPY_LIMIT = 3500; // Maximum characters per copy
+const DEFAULT_COPY_LIMIT = 3500;
+
+function getCopyLimitFromQuery() {
+  const query = window.location.search;
+  const match = query.match(/\d+/); // Find the first number in the query string
+  return match ? parseInt(match[0], 10) : DEFAULT_COPY_LIMIT;
+}
+
+const COPY_LIMIT = getCopyLimitFromQuery();
 const REFERENCE_LINK = "\nhttps://a-reflections.web.app";
 
 function App() {
