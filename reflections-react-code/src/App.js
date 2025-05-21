@@ -16,6 +16,7 @@ const COPY_LIMIT = getCopyLimitFromQuery();
 const REFERENCE_LINK = "\nhttps://a-reflections.web.app";
 
 function App() {
+  const [loadingChunks, setLoadingChunks] = useState(true);
   const [copied, setCopied] = useState(false);
   const [copyIndex, setCopyIndex] = useState(0);
   const [textChunks, setTextChunks] = useState([]);
@@ -58,9 +59,10 @@ function App() {
     // MutationObserver to wait until content is loaded inside #readme
     const observer = new MutationObserver(() => {
       const fullText = readmeDiv.innerText.trim();
-      if (fullText.length > 0) {
+      if (fullText.length > COPY_LIMIT / 2) {
         const chunks = splitTextIntoChunks(fullText);
         setTextChunks(chunks);
+        setLoadingChunks(false); // ✅ Set as ready
         observer.disconnect(); // Stop observing once text is ready
       }
     });
@@ -126,6 +128,7 @@ function App() {
         textChunks={textChunks}
         images={images}
         handleClickOpen={handleClickOpen}
+        loading={loadingChunks}
       />
       <div id="print-header" style={{display: 'none'}}></div>
       <Container p={2} mt={2}>

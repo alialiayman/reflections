@@ -19,6 +19,7 @@ const Header = ({
   handleClickOpen,
   copyIndex,
   textChunks,
+  loading,
   ...props
 }) => {
   const theme = useTheme();
@@ -104,7 +105,7 @@ const Header = ({
                   <GitHubIcon />
                 </Tooltip>
               </IconButton>
-              <IconButton
+              {!loading && <IconButton
                 color="inherit"
                 onClick={handleCopy}
                 aria-label="Copy to Clipboard"
@@ -116,7 +117,7 @@ const Header = ({
                     <Typography variant="body">{`Copied ${copyIndex}/${textChunks.length}`}</Typography>
                   )}
                 </Tooltip>
-              </IconButton>
+              </IconButton>}
               <IconButton
                 color="inherit"
                 aria-label="Translate"
