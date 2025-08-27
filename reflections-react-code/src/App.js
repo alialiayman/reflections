@@ -134,7 +134,6 @@ function App() {
       <Container p={2} mt={2}>
         <Main />
       </Container>
-      <div id="print-footer" style={{display: 'none'}}></div>
 
       {/* Modal for Enlarged Image */}
       <Dialog open={open} onClose={handleClose}>
