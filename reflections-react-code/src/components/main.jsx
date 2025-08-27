@@ -10,7 +10,7 @@ export default function Main() {
       </div>
       <DisplayReadme path={path} />
       <div id="print-footer" style={{ display: "none" }}>
-        <DisplayReadme path={path} filename="print-footer.md" />
+        <DisplayReadme path={path}  />
       </div>
 
       <Typography
