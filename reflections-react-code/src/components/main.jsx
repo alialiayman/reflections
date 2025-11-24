@@ -5,14 +5,7 @@ export default function Main() {
   const path = window.location.pathname;
   return (
     <div id="readme">
-      <div id="print-header" style={{ display: "none" }}>
-        <DisplayReadme path={path} filename="print-header.md" />
-      </div>
       <DisplayReadme path={path} />
-      <div id="print-footer" style={{ display: "none" }}>
-        <DisplayReadme path={path} filename="print-footer.md" />
-      </div>
-
       <Typography
         variant="caption"
         color="textSecondary"
