@@ -225,7 +225,9 @@
 وهذا هو “موت أوزوريس” الحقيقي:
 ليس موت الجسد، بل موت الطمأنينة، سقوط الثقة، وانكسار الروح.
 
-<img width="250" height="543" alt="Image" src="https://github.com/user-attachments/assets/93bf4fd3-a56e-4f71-8ee0-fb4fd5bd88a9" />
+
+<img width="250" height="543" alt="osiris copy" src="https://github.com/user-attachments/assets/35d9885a-a9fd-4827-a2dd-3cb35eb9e62f" />
+
 كيف رسمه المصري القديم؟
 
 لم يكن الرسم اعتباطيًا:
