@@ -12,8 +12,8 @@ const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </container>`;
 
 const DEFAULT_EPUB_METADATA = {
-  creator: "Reflections",
-  publisher: "Reflections",
+  creator: "ايمن علي محمد",
+  publisher: "ايمن علي محمد",
   subject: "Spiritual reflections",
   rights: "All rights reserved",
   language: "ar",
@@ -192,7 +192,7 @@ const mapImagesToSections = (images, sectionsCount) => {
 
 const buildXhtml = (title, body) => `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="ar" xml:lang="ar" dir="rtl">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="ar" xml:lang="ar" dir="rtl">
   <head>
     <meta charset="utf-8" />
     <title>${escapeXml(title)}</title>
@@ -301,6 +301,21 @@ const getFolderNameFromPath = (path = "") => {
   return decodeURIComponent(lastSegment);
 };
 
+const padNumber = (value) => String(value).padStart(2, "0");
+
+const generateIsbnLikeIdentifier = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = padNumber(now.getMonth() + 1);
+  const day = padNumber(now.getDate());
+  const hour = padNumber(now.getHours());
+  const minute = padNumber(now.getMinutes());
+  const second = padNumber(now.getSeconds());
+  const randomPart = String(Math.floor(Math.random() * 1000)).padStart(3, "0");
+
+  return `979-${year}-${month}${day}-${hour}${minute}${second}-${randomPart}`;
+};
+
 export const exportFolderToEpub = async ({ path, images }) => {
   const markdown = await fetchMarkdown(path);
   const sections = splitMarkdownSections(markdown);
@@ -349,7 +364,7 @@ export const exportFolderToEpub = async ({ path, images }) => {
     (path === "/"
       ? "Reflections"
       : decodeURIComponent(path.replaceAll("/", "").trim()) || "Reflections");
-  const identifier = `reflections-${Date.now()}`;
+  const identifier = generateIsbnLikeIdentifier();
   const description = extractFirstMarkdownParagraph(markdown);
   const createdDate = new Date().toISOString().slice(0, 10);
   const modifiedDate = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -390,7 +405,9 @@ export const exportFolderToEpub = async ({ path, images }) => {
   const chapterDocs = sections.map((section, index) => {
     const chapterId = `chapter-${index + 1}`;
     const chapterHref = `text/${chapterId}.xhtml`;
-    const sectionHtml = domPurify.sanitize(marked.parse(section.markdown));
+    const sectionHtml = domPurify.sanitize(
+      marked.parse(section.markdown, { xhtml: true })
+    );
     const sectionImages = imagesBySection.get(index) || [];
 
     const imagesHtml = sectionImages
@@ -423,12 +440,32 @@ export const exportFolderToEpub = async ({ path, images }) => {
           "Cover",
           `    <section id="cover" style="text-align:center;"><h1 style="margin:0 0 1rem 0;">${escapeXml(
             title
-          )}</h1><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
+          )}</h1><p style="margin:0 0 1rem 0;font-size:0.95em;opacity:0.8;">Book ID: ${escapeXml(
+            identifier
+          )}</p><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
             title
           )}" style="max-width:100%;height:auto;" /></section>`
         ),
       }
     : null;
+
+  const infoDoc = {
+    id: "book-info-page",
+    href: "text/book-info-page.xhtml",
+    heading: "Book Info",
+    xhtml: buildXhtml(
+      "Book Info",
+      `    <section id="book-info"><h1>${escapeXml(
+        title
+      )}</h1><p><strong>Book ID:</strong> ${escapeXml(
+        identifier
+      )}</p><p><strong>Author:</strong> ${escapeXml(
+        epubMetadata.creator
+      )}</p><p><strong>Publisher:</strong> ${escapeXml(
+        epubMetadata.publisher
+      )}</p><p><strong>Created:</strong> ${escapeXml(createdDate)}</p></section>`
+    ),
+  };
 
   const backCoverDoc = backCoverAsset
     ? {
@@ -444,6 +481,7 @@ export const exportFolderToEpub = async ({ path, images }) => {
 
   const spineDocs = [
     ...(coverDoc ? [coverDoc] : []),
+    infoDoc,
     ...chapterDocs,
     ...(backCoverDoc ? [backCoverDoc] : []),
   ];
