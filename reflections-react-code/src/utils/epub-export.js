@@ -217,6 +217,9 @@ const normalizeImageLabel = (fileName = "") =>
     .replace(/\s+/g, " ")
     .trim();
 
+const stripLeadingImageNumber = (label = "") =>
+  label.replace(/^\d+(?:\.\d+)?[\s._-]*/, "").trim();
+
 const extractFirstMarkdownHeader = (markdownText = "") => {
   const lines = markdownText.split("\n");
   for (const line of lines) {
@@ -416,7 +419,8 @@ export const exportFolderToEpub = async ({ path, images }) => {
           `<figure style="text-align:center;"><img src="../images/${image.fileName}" alt="${escapeXml(
             image.name
           )}" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
-            fileNameWithoutExtension(image.name)
+            stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
+              fileNameWithoutExtension(image.name)
           )}</figcaption></figure>`
       )
       .join("\n");
@@ -457,13 +461,13 @@ export const exportFolderToEpub = async ({ path, images }) => {
       "Book Info",
       `    <section id="book-info"><h1>${escapeXml(
         title
-      )}</h1><p><strong>Book ID:</strong> ${escapeXml(
+      )}</h1><p><strong>رقم الكتاب:</strong> ${escapeXml(
         identifier
-      )}</p><p><strong>Author:</strong> ${escapeXml(
+      )}</p><p><strong>المؤلف:</strong> ${escapeXml(
         epubMetadata.creator
-      )}</p><p><strong>Publisher:</strong> ${escapeXml(
+      )}</p><p><strong>الناشر:</strong> ${escapeXml(
         epubMetadata.publisher
-      )}</p><p><strong>Created:</strong> ${escapeXml(createdDate)}</p></section>`
+      )}</p><p><strong>تاريخ الإنشاء:</strong> ${escapeXml(createdDate)}</p></section>`
     ),
   };
 
