@@ -41,7 +41,10 @@ function App() {
               (file) =>
                 file.name.endsWith(".jpg") || file.name.endsWith(".jpeg")
             )
-            .map((file) => file.download_url);
+            .map((file) => ({
+              name: file.name,
+              url: file.download_url,
+            }));
 
           setImages(jpgFiles);
         }
