@@ -192,12 +192,12 @@ const mapImagesToSections = (images, sectionsCount) => {
 
 const buildXhtml = (title, body) => `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" lang="ar" xml:lang="ar">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="ar" xml:lang="ar" dir="rtl">
   <head>
     <meta charset="utf-8" />
     <title>${escapeXml(title)}</title>
   </head>
-  <body>
+  <body style="direction:rtl;text-align:right;">
 ${body}
   </body>
 </html>`;
@@ -289,6 +289,16 @@ const fetchImageBlob = async (url) => {
     throw new Error(`Unable to fetch image: ${url}`);
   }
   return response.blob();
+};
+
+const getFolderNameFromPath = (path = "") => {
+  if (!path || path === "/") {
+    return "reflections";
+  }
+
+  const segments = path.split("/").filter(Boolean);
+  const lastSegment = segments[segments.length - 1] || "reflections";
+  return decodeURIComponent(lastSegment);
 };
 
 export const exportFolderToEpub = async ({ path, images }) => {
@@ -411,7 +421,9 @@ export const exportFolderToEpub = async ({ path, images }) => {
         heading: "Cover",
         xhtml: buildXhtml(
           "Cover",
-          `    <section id="cover" style="text-align:center;"><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
+          `    <section id="cover" style="text-align:center;"><h1 style="margin:0 0 1rem 0;">${escapeXml(
+            title
+          )}</h1><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
             title
           )}" style="max-width:100%;height:auto;" /></section>`
         ),
@@ -526,5 +538,6 @@ export const exportFolderToEpub = async ({ path, images }) => {
     mimeType: "application/epub+zip",
   });
 
-  saveAs(epubBlob, `${slugify(title)}.epub`);
+  const fileNameBase = getFolderNameFromPath(path);
+  saveAs(epubBlob, `${slugify(fileNameBase)}.epub`);
 };
