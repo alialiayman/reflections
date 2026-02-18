@@ -19,7 +19,7 @@ const DEFAULT_EPUB_METADATA = {
   language: "ar",
   contactWhatsApp: "+19495221879",
   contactUrl: "https://wa.me/19495221879",
-  website: "غير متوفر",
+  website: "https://a-reflections.web.app",
   location: "مدينة الرحاب في القاهرة",
   disclaimer:
     "هذا الكتاب تأملي/تجريبي، ويعبّر عن تجربة شخصية، وليس مرجعًا طبيًا أو قانونيًا أو مهنيًا.",
