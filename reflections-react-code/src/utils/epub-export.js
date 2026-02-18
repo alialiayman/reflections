@@ -13,10 +13,16 @@ const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 
 const DEFAULT_EPUB_METADATA = {
   creator: "ايمن علي محمد",
-  publisher: "ايمن علي محمد",
-  subject: "Spiritual reflections",
-  rights: "All rights reserved",
+  publisher: "نشر مستقل عبر الإنترنت",
+  subject: "تأملات روحية",
+  rights: "جميع الحقوق محفوظة",
   language: "ar",
+  contactWhatsApp: "+19495221879",
+  contactUrl: "https://wa.me/19495221879",
+  website: "غير متوفر",
+  location: "مدينة الرحاب في القاهرة",
+  disclaimer:
+    "هذا الكتاب تأملي/تجريبي، ويعبّر عن تجربة شخصية، وليس مرجعًا طبيًا أو قانونيًا أو مهنيًا.",
 };
 
 const escapeXml = (value = "") =>
@@ -365,8 +371,8 @@ export const exportFolderToEpub = async ({ path, images }) => {
   const title =
     firstHeaderTitle ||
     (path === "/"
-      ? "Reflections"
-      : decodeURIComponent(path.replaceAll("/", "").trim()) || "Reflections");
+      ? "تأملات"
+      : decodeURIComponent(path.replaceAll("/", "").trim()) || "تأملات");
   const identifier = generateIsbnLikeIdentifier();
   const description = extractFirstMarkdownParagraph(markdown);
   const createdDate = new Date().toISOString().slice(0, 10);
@@ -439,16 +445,32 @@ export const exportFolderToEpub = async ({ path, images }) => {
     ? {
         id: "cover-page",
         href: "text/cover-page.xhtml",
-        heading: "Cover",
+        heading: "الغلاف",
         xhtml: buildXhtml(
-          "Cover",
+          "الغلاف",
           `    <section id="cover" style="text-align:center;"><h1 style="margin:0 0 1rem 0;">${escapeXml(
             title
-          )}</h1><p style="margin:0 0 1rem 0;font-size:0.95em;opacity:0.8;">Book ID: ${escapeXml(
+          )}</h1><p style="margin:0 0 1rem 0;font-size:0.95em;opacity:0.8;">رقم الكتاب: ${escapeXml(
             identifier
           )}</p><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
             title
-          )}" style="max-width:100%;height:auto;" /></section>`
+          )}" style="max-width:100%;height:auto;" /><div style="text-align:right;margin-top:1rem;"><p><strong>المؤلف:</strong> ${escapeXml(
+            epubMetadata.creator
+          )}</p><p><strong>الناشر:</strong> ${escapeXml(
+            epubMetadata.publisher
+          )}</p><p><strong>العنوان الكامل:</strong> ${escapeXml(
+            title
+          )}</p><p><strong>الموقع:</strong> ${escapeXml(
+            epubMetadata.location
+          )}</p><p><strong>وسيلة التواصل (واتساب):</strong> ${escapeXml(
+            epubMetadata.contactWhatsApp
+          )}</p><p><strong>رابط التواصل:</strong> <a href="${escapeXml(
+            epubMetadata.contactUrl
+          )}">${escapeXml(epubMetadata.contactUrl)}</a></p><p><strong>الموقع الإلكتروني:</strong> ${escapeXml(
+            epubMetadata.website
+          )}</p><p><strong>إخلاء المسؤولية:</strong> ${escapeXml(
+            epubMetadata.disclaimer
+          )}</p></div></section>`
         ),
       }
     : null;
@@ -456,9 +478,9 @@ export const exportFolderToEpub = async ({ path, images }) => {
   const infoDoc = {
     id: "book-info-page",
     href: "text/book-info-page.xhtml",
-    heading: "Book Info",
+    heading: "معلومات الكتاب",
     xhtml: buildXhtml(
-      "Book Info",
+      "معلومات الكتاب",
       `    <section id="book-info"><h1>${escapeXml(
         title
       )}</h1><p><strong>رقم الكتاب:</strong> ${escapeXml(
@@ -467,6 +489,18 @@ export const exportFolderToEpub = async ({ path, images }) => {
         epubMetadata.creator
       )}</p><p><strong>الناشر:</strong> ${escapeXml(
         epubMetadata.publisher
+      )}</p><p><strong>العنوان الكامل:</strong> ${escapeXml(
+        title
+      )}</p><p><strong>الموقع:</strong> ${escapeXml(
+        epubMetadata.location
+      )}</p><p><strong>وسيلة التواصل (واتساب):</strong> ${escapeXml(
+        epubMetadata.contactWhatsApp
+      )}</p><p><strong>رابط التواصل:</strong> <a href="${escapeXml(
+        epubMetadata.contactUrl
+      )}">${escapeXml(epubMetadata.contactUrl)}</a></p><p><strong>الموقع الإلكتروني:</strong> ${escapeXml(
+        epubMetadata.website
+      )}</p><p><strong>إخلاء المسؤولية:</strong> ${escapeXml(
+        epubMetadata.disclaimer
       )}</p><p><strong>تاريخ الإنشاء:</strong> ${escapeXml(createdDate)}</p></section>`
     ),
   };
@@ -475,10 +509,10 @@ export const exportFolderToEpub = async ({ path, images }) => {
     ? {
         id: "back-cover-page",
         href: "text/back-cover-page.xhtml",
-        heading: "Back Cover",
+        heading: "الغلاف الخلفي",
         xhtml: buildXhtml(
-          "Back Cover",
-          `    <section id="back-cover" style="text-align:center;"><img src="../images/${backCoverAsset.fileName}" alt="Back Cover" style="max-width:100%;height:auto;" /></section>`
+          "الغلاف الخلفي",
+          `    <section id="back-cover" style="text-align:center;"><img src="../images/${backCoverAsset.fileName}" alt="الغلاف الخلفي" style="max-width:100%;height:auto;" /></section>`
         ),
       }
     : null;
@@ -498,7 +532,7 @@ export const exportFolderToEpub = async ({ path, images }) => {
         `        <li><a href="${chapter.href}">${escapeXml(chapter.heading)}</a></li>`
     )
     .join("\n")}\n      </ol>\n    </nav>`;
-  const navXhtml = buildXhtml(`${title} - TOC`, navBody);
+  const navXhtml = buildXhtml(`${title} - الفهرس`, navBody);
 
   const manifestItems = [
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
@@ -581,5 +615,10 @@ export const exportFolderToEpub = async ({ path, images }) => {
   });
 
   const fileNameBase = getFolderNameFromPath(path);
-  saveAs(epubBlob, `${slugify(fileNameBase)}.epub`);
+  const exportedAt = new Date()
+    .toISOString()
+    .replace(/[:.]/g, "-")
+    .replace("T", "_")
+    .replace("Z", "");
+  saveAs(epubBlob, `${slugify(fileNameBase)}-${exportedAt}.epub`);
 };
