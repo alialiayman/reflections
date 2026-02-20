@@ -81,6 +81,11 @@ const Header = ({
         sx={{ backgroundColor: "#1B4D3E", color: "#A4B494" }}
         {...props}
       >
+        <IconButton color="inherit" href="/" aria-label="home">
+          <Tooltip title="Home">
+            <HomeIcon />
+          </Tooltip>
+        </IconButton>
         <Toolbar sx={{ justifyContent: isMobile ? "center" : "space-between" }}>
           {isMobile ? (
             <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
@@ -130,11 +135,6 @@ const Header = ({
                   maxWidth: "20vw",
                 }}
               >
-                <IconButton color="inherit" href="/" aria-label="home">
-                  <Tooltip title="Home">
-                    <HomeIcon />
-                  </Tooltip>
-                </IconButton>
                 <IconButton
                   color="inherit"
                   href={`https://github.com/alialiayman/reflections${
@@ -147,19 +147,21 @@ const Header = ({
                     <GitHubIcon />
                   </Tooltip>
                 </IconButton>
-                {!loading && <IconButton
-                  color="inherit"
-                  onClick={handleCopy}
-                  aria-label="Copy to Clipboard"
-                >
-                  <Tooltip title="Copy All">
-                    {!copied ? (
-                      <ContentCopyIcon />
-                    ) : (
-                      <Typography variant="body">{`Copied ${copyIndex}/${textChunks.length}`}</Typography>
-                    )}
-                  </Tooltip>
-                </IconButton>}
+                {!loading && (
+                  <IconButton
+                    color="inherit"
+                    onClick={handleCopy}
+                    aria-label="Copy to Clipboard"
+                  >
+                    <Tooltip title="Copy All">
+                      {!copied ? (
+                        <ContentCopyIcon />
+                      ) : (
+                        <Typography variant="body">{`Copied ${copyIndex}/${textChunks.length}`}</Typography>
+                      )}
+                    </Tooltip>
+                  </IconButton>
+                )}
                 <IconButton
                   color="inherit"
                   aria-label="Translate"
