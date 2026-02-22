@@ -15,7 +15,7 @@ export default function Main() {
           display: "block",
         }}
       >
-        {`https://github.com/alialiayman/reflections${
+        {`https://a-reflections.web.app${
           path === "/" ? "" : path
         }`}
       </Typography>
