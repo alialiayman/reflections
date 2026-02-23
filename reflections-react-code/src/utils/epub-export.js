@@ -15,14 +15,16 @@ const DEFAULT_EPUB_METADATA = {
   creator: "ايمن علي محمد",
   publisher: "نشر مستقل عبر الإنترنت",
   subject: "تأملات روحية",
-  rights: "جميع الحقوق محفوظة",
+  rights: "© جميع الحقوق محفوظة",
   language: "ar",
-  contactWhatsApp: "+19495221879",
+  contactWhatsApp: "0019495221879",
   contactUrl: "https://wa.me/19495221879",
   website: "https://a-reflections.web.app",
   location: "مدينة الرحاب في القاهرة",
   disclaimer:
     "هذا الكتاب تأملي/تجريبي، ويعبّر عن تجربة شخصية، وليس مرجعًا طبيًا أو قانونيًا أو مهنيًا.",
+  aiDisclosure:
+    "تم إنشاء وتحرير أجزاء من هذا الكتاب باستخدام تقنيات الذكاء الاصطناعي. الفكرة أصلًا من الكاتب، بينما الصياغة اللغوية في معظمها مولَّدة بالذكاء الاصطناعي، كما أُنشئت الصور كذلك بالذكاء الاصطناعي.",
 };
 
 const escapeXml = (value = "") =>
@@ -377,8 +379,10 @@ export const exportFolderToEpub = async ({ path, images }) => {
   const description = extractFirstMarkdownParagraph(markdown);
   const createdDate = new Date().toISOString().slice(0, 10);
   const modifiedDate = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+  const copyrightYear = new Date().getFullYear();
   const epubMetadata = {
     ...DEFAULT_EPUB_METADATA,
+    rights: `© ${copyrightYear} ${DEFAULT_EPUB_METADATA.creator}. جميع الحقوق محفوظة.`,
     description,
   };
 
@@ -441,6 +445,8 @@ export const exportFolderToEpub = async ({ path, images }) => {
     };
   });
 
+  const coverTopSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img" aria-label="زخرفة غلاف" style="max-width:220px;width:100%;height:auto;display:block;margin:0 auto 1rem auto;"><defs><linearGradient id="coverGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#2b6651"/><stop offset="100%" stop-color="#1b4d3e"/></linearGradient></defs><rect x="10" y="10" width="300" height="160" rx="20" fill="url(#coverGrad)" opacity="0.12"/><circle cx="160" cy="54" r="20" fill="#d8b464" opacity="0.85"/><path d="M72 120c22-16 44-16 66 0v26c-22-16-44-16-66 0z" fill="#1b4d3e" opacity="0.95"/><path d="M182 120c22-16 44-16 66 0v26c-22-16-44-16-66 0z" fill="#1b4d3e" opacity="0.95"/><path d="M138 120c7-4 14-6 22-6s15 2 22 6v26c-7-4-14-6-22-6s-15 2-22 6z" fill="#2b6651"/><path d="M72 120c22-16 44-16 66 0M182 120c22-16 44-16 66 0" fill="none" stroke="#d8b464" stroke-width="2" opacity="0.9"/></svg>`;
+
   const coverDoc = coverAsset
     ? {
         id: "cover-page",
@@ -448,13 +454,13 @@ export const exportFolderToEpub = async ({ path, images }) => {
         heading: "الغلاف",
         xhtml: buildXhtml(
           "الغلاف",
-          `    <section id="cover" style="text-align:center;"><h1 style="margin:0 0 1rem 0;">${escapeXml(
+          `    <section id="cover" style="text-align:center;max-width:780px;margin:0 auto;padding:1rem 0.2rem;">${coverTopSvg}<h1 style="margin:0 0 0.65rem 0;">${escapeXml(
             title
           )}</h1><p style="margin:0 0 1rem 0;font-size:0.95em;opacity:0.8;">رقم الكتاب: ${escapeXml(
             identifier
           )}</p><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
             title
-          )}" style="max-width:100%;height:auto;" /><div style="text-align:right;margin-top:1rem;"><p><strong>المؤلف:</strong> ${escapeXml(
+          )}" style="max-width:100%;height:auto;border-radius:10px;" /><div style="text-align:right;margin-top:1.2rem;line-height:1.85;"><p><strong>المؤلف:</strong> ${escapeXml(
             epubMetadata.creator
           )}</p><p><strong>الناشر:</strong> ${escapeXml(
             epubMetadata.publisher
@@ -468,6 +474,10 @@ export const exportFolderToEpub = async ({ path, images }) => {
             epubMetadata.contactUrl
           )}">${escapeXml(epubMetadata.contactUrl)}</a></p><p><strong>الموقع الإلكتروني:</strong> ${escapeXml(
             epubMetadata.website
+          )}</p><p><strong>حقوق النشر:</strong> ${escapeXml(
+            epubMetadata.rights
+          )}</p><p><strong>تنويه الذكاء الاصطناعي:</strong> ${escapeXml(
+            epubMetadata.aiDisclosure
           )}</p><p><strong>إخلاء المسؤولية:</strong> ${escapeXml(
             epubMetadata.disclaimer
           )}</p></div></section>`
@@ -499,6 +509,10 @@ export const exportFolderToEpub = async ({ path, images }) => {
         epubMetadata.contactUrl
       )}">${escapeXml(epubMetadata.contactUrl)}</a></p><p><strong>الموقع الإلكتروني:</strong> ${escapeXml(
         epubMetadata.website
+      )}</p><p><strong>حقوق النشر:</strong> ${escapeXml(
+        epubMetadata.rights
+      )}</p><p><strong>تنويه الذكاء الاصطناعي:</strong> ${escapeXml(
+        epubMetadata.aiDisclosure
       )}</p><p><strong>إخلاء المسؤولية:</strong> ${escapeXml(
         epubMetadata.disclaimer
       )}</p><p><strong>تاريخ الإنشاء:</strong> ${escapeXml(createdDate)}</p></section>`
