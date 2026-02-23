@@ -46,13 +46,13 @@ const slugify = (value = "") =>
     .replace(/-+/g, "-") || "reflections";
 
 const getNumericPrefix = (fileName = "") => {
-  const match = fileName.match(/^(\d+(?:\.\d+)*)/);
+  const match = fileName.match(/^(\d+(?:[-.]\d+)*)/);
   if (!match) {
     return null;
   }
 
   const segments = match[1]
-    .split(".")
+    .split(/[-.]/)
     .map((segment) => Number.parseInt(segment, 10));
 
   if (segments.length === 0 || segments.some((segment) => Number.isNaN(segment))) {
@@ -242,6 +242,39 @@ const injectHtmlAtMarkdownMidpoint = (markdownText, htmlBlock) => {
   return `${before}\n${htmlBlock}\n\n${after}`;
 };
 
+const ensureXhtmlVoidTags = (html = "") => {
+  const voidTags = new Set([
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
+  ]);
+
+  return html.replace(/<([a-zA-Z][\w:-]*)([^>]*)>/g, (match, tagName, attrs) => {
+    const normalizedTagName = tagName.toLowerCase();
+    if (!voidTags.has(normalizedTagName)) {
+      return match;
+    }
+
+    const trimmedAttrs = attrs.trimEnd();
+    if (trimmedAttrs.endsWith("/")) {
+      return `<${tagName}${attrs}>`;
+    }
+
+    return `<${tagName}${attrs} />`;
+  });
+};
+
 const buildXhtml = (title, body) => `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="ar" xml:lang="ar" dir="rtl">
@@ -270,7 +303,7 @@ const normalizeImageLabel = (fileName = "") =>
     .trim();
 
 const stripLeadingImageNumber = (label = "") =>
-  label.replace(/^\d+(?:\.\d+)?[\s._-]*/, "").trim();
+  label.replace(/^\d+(?:[-.]\d+)*[\s._-]*/, "").trim();
 
 const extractFirstMarkdownHeader = (markdownText = "") => {
   const lines = markdownText.split("\n");
@@ -513,8 +546,9 @@ export const exportFolderToEpub = async ({
     const sectionHtml = domPurify.sanitize(
       marked.parse(markdownWithMiddleImages, { xhtml: true })
     );
+    const sectionXhtml = ensureXhtmlVoidTags(sectionHtml);
 
-    const body = `    <section id="${chapterId}">\n      ${sectionHtml}\n      ${endImagesHtml}\n    </section>`;
+    const body = `    <section id="${chapterId}">\n      ${sectionXhtml}\n      ${endImagesHtml}\n    </section>`;
 
     return {
       id: chapterId,
