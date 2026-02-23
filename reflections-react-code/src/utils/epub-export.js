@@ -282,7 +282,7 @@ const buildXhtml = (title, body) => `<?xml version="1.0" encoding="UTF-8"?>
     <meta charset="utf-8" />
     <title>${escapeXml(title)}</title>
   </head>
-  <body style="direction:rtl;text-align:right;">
+  <body style="text-align:right;">
 ${body}
   </body>
 </html>`;
