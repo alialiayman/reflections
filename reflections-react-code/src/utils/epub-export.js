@@ -27,6 +27,8 @@ const DEFAULT_EPUB_METADATA = {
     "تم إنشاء وتحرير أجزاء من هذا الكتاب باستخدام تقنيات الذكاء الاصطناعي. الفكرة أصلًا من الكاتب، بينما الصياغة اللغوية في معظمها مولَّدة بالذكاء الاصطناعي، كما أُنشئت الصور كذلك بالذكاء الاصطناعي.",
 };
 
+const DEFAULT_SECTION_MIDDLE_IMAGE_RATIO = 0.3;
+
 const escapeXml = (value = "") =>
   value
     .replaceAll("&", "&amp;")
@@ -44,22 +46,22 @@ const slugify = (value = "") =>
     .replace(/-+/g, "-") || "reflections";
 
 const getNumericPrefix = (fileName = "") => {
-  const match = fileName.match(/^(\d+(?:\.\d+)?)/);
+  const match = fileName.match(/^(\d+(?:\.\d+)*)/);
   if (!match) {
     return null;
   }
 
-  const [majorRaw, minorRaw] = match[1].split(".");
-  const major = Number.parseInt(majorRaw, 10);
-  const minor = minorRaw ? Number.parseInt(minorRaw, 10) : null;
+  const segments = match[1]
+    .split(".")
+    .map((segment) => Number.parseInt(segment, 10));
 
-  if (Number.isNaN(major)) {
+  if (segments.length === 0 || segments.some((segment) => Number.isNaN(segment))) {
     return null;
   }
 
   return {
-    major,
-    minor: Number.isNaN(minor) ? null : minor,
+    sectionMajor: segments[0],
+    segments,
     raw: match[1],
   };
 };
@@ -75,13 +77,24 @@ const compareNumericPrefix = (left, right) => {
     return -1;
   }
 
-  if (left.major !== right.major) {
-    return left.major - right.major;
+  const maxLength = Math.max(left.segments.length, right.segments.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    const leftSegment = left.segments[index];
+    const rightSegment = right.segments[index];
+
+    if (leftSegment === undefined) {
+      return -1;
+    }
+    if (rightSegment === undefined) {
+      return 1;
+    }
+    if (leftSegment !== rightSegment) {
+      return leftSegment - rightSegment;
+    }
   }
 
-  const leftMinor = left.minor === null ? -1 : left.minor;
-  const rightMinor = right.minor === null ? -1 : right.minor;
-  return leftMinor - rightMinor;
+  return 0;
 };
 
 const splitMarkdownSections = (markdownText) => {
@@ -148,8 +161,6 @@ const mapImagesToSections = (images, sectionsCount) => {
       return left.name.localeCompare(right.name);
     });
 
-  const majorBaseIndex = new Map();
-  const majorLastIndex = new Map();
   let fallbackSection = 0;
 
   return normalized.map((image) => {
@@ -161,41 +172,74 @@ const mapImagesToSections = (images, sectionsCount) => {
       return { ...image, sectionIndex };
     }
 
-    const { major, minor } = prefix;
-
-    const getOrCreateBase = () => {
-      if (majorBaseIndex.has(major)) {
-        return majorBaseIndex.get(major);
-      }
-
-      let computedBase;
-      if (major === 1) {
-        computedBase = 0;
-      } else if (majorLastIndex.has(major - 1)) {
-        computedBase = majorLastIndex.get(major - 1) + 1;
-      } else {
-        computedBase = major - 1;
-      }
-
-      const safeBase = Math.max(0, Math.min(computedBase, sectionsCount - 1));
-      majorBaseIndex.set(major, safeBase);
-      return safeBase;
-    };
-
-    const baseIndex = getOrCreateBase();
-    const target = minor === null ? baseIndex : baseIndex + minor;
-    const safeTarget = Math.max(0, Math.min(target, sectionsCount - 1));
-
-    const currentLast = majorLastIndex.get(major) ?? -1;
-    if (safeTarget > currentLast) {
-      majorLastIndex.set(major, safeTarget);
-    }
+    const safeTarget = Math.max(
+      0,
+      Math.min(prefix.sectionMajor - 1, sectionsCount - 1)
+    );
 
     return {
       ...image,
       sectionIndex: safeTarget,
     };
   });
+};
+
+const buildSectionImageFigureHtml = (image) =>
+  `<figure style="text-align:center;"><img src="../images/${image.fileName}" alt="${escapeXml(
+    image.name
+  )}" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
+    stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
+      fileNameWithoutExtension(image.name)
+  )}</figcaption></figure>`;
+
+const distributeImagesInSection = (
+  images,
+  middleRatio = DEFAULT_SECTION_MIDDLE_IMAGE_RATIO
+) => {
+  if (images.length <= 1) {
+    return {
+      middle: [],
+      end: images,
+    };
+  }
+
+  const normalizedRatio = clamp(middleRatio, 0, 1);
+  const rawMiddleCount = Math.round(images.length * normalizedRatio);
+  const middleCount = clamp(rawMiddleCount, 1, images.length - 1);
+
+  return {
+    middle: images.slice(0, middleCount),
+    end: images.slice(middleCount),
+  };
+};
+
+const injectHtmlAtMarkdownMidpoint = (markdownText, htmlBlock) => {
+  if (!htmlBlock) {
+    return markdownText;
+  }
+
+  const lines = markdownText.split("\n");
+  const breakIndexes = [];
+
+  for (let index = 1; index < lines.length - 1; index += 1) {
+    if (
+      lines[index].trim() === "" &&
+      lines[index - 1].trim() !== "" &&
+      lines[index + 1].trim() !== ""
+    ) {
+      breakIndexes.push(index);
+    }
+  }
+
+  if (breakIndexes.length === 0) {
+    return `${markdownText}\n\n${htmlBlock}`;
+  }
+
+  const targetBreakIndex = breakIndexes[Math.floor(breakIndexes.length / 2)];
+  const before = lines.slice(0, targetBreakIndex + 1).join("\n");
+  const after = lines.slice(targetBreakIndex + 1).join("\n");
+
+  return `${before}\n${htmlBlock}\n\n${after}`;
 };
 
 const buildXhtml = (title, body) => `<?xml version="1.0" encoding="UTF-8"?>
@@ -282,6 +326,32 @@ const imageMimeTypeFromName = (fileName = "") => {
   return extensionToMime[extension] || "image/jpeg";
 };
 
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const resolveSectionImageMiddleRatio = (
+  explicitRatio = null,
+  defaultRatio = DEFAULT_SECTION_MIDDLE_IMAGE_RATIO
+) => {
+  if (typeof explicitRatio === "number" && !Number.isNaN(explicitRatio)) {
+    return clamp(explicitRatio, 0, 1);
+  }
+
+  const query = window.location.search;
+  const match = query.match(/(?:\?|&)epubImageMiddleRatio=([^&]+)/i);
+
+  if (!match) {
+    return clamp(defaultRatio, 0, 1);
+  }
+
+  const parsed = Number.parseFloat(decodeURIComponent(match[1]));
+  if (Number.isNaN(parsed)) {
+    return clamp(defaultRatio, 0, 1);
+  }
+
+  const ratio = parsed > 1 ? parsed / 100 : parsed;
+  return clamp(ratio, 0, 1);
+};
+
 const fetchMarkdown = async (path) => {
   const normalizedPath = path === "/" ? "" : path;
   const readmeUrl = `${GITHUB}${normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`}README.md`;
@@ -327,10 +397,17 @@ const generateIsbnLikeIdentifier = () => {
   return `979-${year}-${month}${day}-${hour}${minute}${second}-${randomPart}`;
 };
 
-export const exportFolderToEpub = async ({ path, images }) => {
+export const exportFolderToEpub = async ({
+  path,
+  images,
+  sectionImageMiddleRatio,
+}) => {
   const markdown = await fetchMarkdown(path);
   const sections = splitMarkdownSections(markdown);
   const firstHeaderTitle = extractFirstMarkdownHeader(markdown);
+  const resolvedSectionImageMiddleRatio = resolveSectionImageMiddleRatio(
+    sectionImageMiddleRatio
+  );
 
   const coverImage = images.find(
     (image) => normalizeImageLabel(image.name) === "cover"
@@ -352,7 +429,7 @@ export const exportFolderToEpub = async ({ path, images }) => {
       const extension = fileExtension(image.name);
       const id = `image-${index + 1}`;
       const fileName = `${id}.${extension}`;
-      const mediaType = blob.type || imageMimeTypeFromName(image.name);
+      const mediaType = imageMimeTypeFromName(image.name) || blob.type;
 
       return {
         ...image,
@@ -418,24 +495,26 @@ export const exportFolderToEpub = async ({ path, images }) => {
   const chapterDocs = sections.map((section, index) => {
     const chapterId = `chapter-${index + 1}`;
     const chapterHref = `text/${chapterId}.xhtml`;
-    const sectionHtml = domPurify.sanitize(
-      marked.parse(section.markdown, { xhtml: true })
-    );
     const sectionImages = imagesBySection.get(index) || [];
-
-    const imagesHtml = sectionImages
-      .map(
-        (image) =>
-          `<figure style="text-align:center;"><img src="../images/${image.fileName}" alt="${escapeXml(
-            image.name
-          )}" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
-            stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
-              fileNameWithoutExtension(image.name)
-          )}</figcaption></figure>`
-      )
+    const distributedImages = distributeImagesInSection(
+      sectionImages,
+      resolvedSectionImageMiddleRatio
+    );
+    const middleImagesHtml = distributedImages.middle
+      .map((image) => buildSectionImageFigureHtml(image))
       .join("\n");
+    const endImagesHtml = distributedImages.end
+      .map((image) => buildSectionImageFigureHtml(image))
+      .join("\n");
+    const markdownWithMiddleImages = injectHtmlAtMarkdownMidpoint(
+      section.markdown,
+      middleImagesHtml
+    );
+    const sectionHtml = domPurify.sanitize(
+      marked.parse(markdownWithMiddleImages, { xhtml: true })
+    );
 
-    const body = `    <section id="${chapterId}">\n      ${sectionHtml}\n      ${imagesHtml}\n    </section>`;
+    const body = `    <section id="${chapterId}">\n      ${sectionHtml}\n      ${endImagesHtml}\n    </section>`;
 
     return {
       id: chapterId,

@@ -36,17 +36,21 @@ function App() {
         const data = await response.json();
 
         if (Array.isArray(data)) {
-          const jpgFiles = data
-            .filter(
-              (file) =>
-                file.name.endsWith(".jpg") || file.name.endsWith(".jpeg")
-            )
+          const imageFiles = data
+            .filter((file) => {
+              const lowerName = file.name.toLowerCase();
+              return (
+                lowerName.endsWith(".jpg") ||
+                lowerName.endsWith(".jpeg") ||
+                lowerName.endsWith(".png")
+              );
+            })
             .map((file) => ({
               name: file.name,
               url: file.download_url,
             }));
 
-          setImages(jpgFiles);
+          setImages(imageFiles);
         }
       } catch (error) {
         console.error("Failed to fetch images", error);
