@@ -735,7 +735,7 @@ export const exportFolderToEpub = async ({
   <manifest>
     ${manifestItems}
   </manifest>
-  <spine>
+  <spine toc="ncx">
     ${spineItems}
   </spine>
 </package>`;
