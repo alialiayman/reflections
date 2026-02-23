@@ -660,9 +660,35 @@ export const exportFolderToEpub = async ({
     )
     .join("\n")}\n      </ol>\n    </nav>`;
   const navXhtml = buildXhtml(`${title} - الفهرس`, navBody);
+  const tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="${escapeXml(
+    epubMetadata.language
+  )}">
+  <head>
+    <meta name="dtb:uid" content="${escapeXml(identifier)}"/>
+    <meta name="dtb:depth" content="1"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle>
+    <text>${escapeXml(title)}</text>
+  </docTitle>
+  <navMap>
+    ${spineDocs
+      .map(
+        (chapter, index) => `
+    <navPoint id="navPoint-${index + 1}" playOrder="${index + 1}">
+      <navLabel><text>${escapeXml(chapter.heading)}</text></navLabel>
+      <content src="${chapter.href}"/>
+    </navPoint>`
+      )
+      .join("")}
+  </navMap>
+</ncx>`;
 
   const manifestItems = [
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+    '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
     ...spineDocs.map(
       (chapter) => {
         const chapterProperties = chapter.id === "cover-page" ? ' properties="svg"' : "";
@@ -721,6 +747,7 @@ export const exportFolderToEpub = async ({
   const oebpsFolder = zip.folder("OEBPS");
   oebpsFolder?.file("content.opf", contentOpf);
   oebpsFolder?.file("nav.xhtml", navXhtml);
+  oebpsFolder?.file("toc.ncx", tocNcx);
 
   const textFolder = oebpsFolder?.folder("text");
   spineDocs.forEach((chapter) => {
