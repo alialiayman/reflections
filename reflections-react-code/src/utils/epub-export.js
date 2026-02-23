@@ -664,8 +664,10 @@ export const exportFolderToEpub = async ({
   const manifestItems = [
     '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
     ...spineDocs.map(
-      (chapter) =>
-        `<item id="${chapter.id}" href="${chapter.href}" media-type="application/xhtml+xml"/>`
+      (chapter) => {
+        const chapterProperties = chapter.id === "cover-page" ? ' properties="svg"' : "";
+        return `<item id="${chapter.id}" href="${chapter.href}" media-type="application/xhtml+xml"${chapterProperties}/>`;
+      }
     ),
     ...(coverAsset
       ? [
