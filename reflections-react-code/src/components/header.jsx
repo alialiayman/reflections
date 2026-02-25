@@ -81,12 +81,12 @@ const Header = ({
         sx={{ backgroundColor: "#1B4D3E", color: "#A4B494" }}
         {...props}
       >
-        <IconButton color="inherit" href="/" aria-label="home">
-          <Tooltip title="Home">
-            <HomeIcon />
-          </Tooltip>
-        </IconButton>
         <Toolbar sx={{ justifyContent: isMobile ? "center" : "space-between" }}>
+          <IconButton color="inherit" href="/" aria-label="home">
+            <Tooltip title="Home">
+              <HomeIcon />
+            </Tooltip>
+          </IconButton>
           {isMobile ? (
             <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
               <IconButton
