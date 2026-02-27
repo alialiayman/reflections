@@ -218,6 +218,7 @@ const sanitizeTokenTextInNode = (node) => {
 
 const FolderListTableCell = ({ children, ...props }) => {
     const childNodes = React.Children.toArray(children);
+    const sanitizedChildren = React.Children.map(children, (child) => sanitizeTokenTextInNode(child));
     let subtitle = '';
     const titleNodes = [];
 
@@ -241,7 +242,7 @@ const FolderListTableCell = ({ children, ...props }) => {
     });
 
     if (!subtitle) {
-        return <td className="readme-folder-table-td" {...props}>{children}</td>;
+        return <td className="readme-folder-table-td" {...props}>{sanitizedChildren}</td>;
     }
 
     return (
