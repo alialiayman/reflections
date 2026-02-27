@@ -10,6 +10,7 @@ import { GITHUB } from '../constants';
 const FOLDER_LIST_TOKEN_REGEX = /\{\{\s*folderList\s*\}\}/gi;
 const REPO_CONTENTS_API_BASE = 'https://api.github.com/repos/alialiayman/reflections/contents';
 const SITE_BASE_URL = 'https://a-reflections.web.app';
+const EXCLUDED_FOLDER_NAMES = new Set(['reflections-react-code']);
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -58,12 +59,25 @@ const sortFoldersNumerically = (folders) => {
     });
 };
 
+const shouldIncludeFolder = (folder) => {
+    if (!folder || typeof folder.name !== 'string') {
+        return false;
+    }
+
+    const folderName = folder.name.trim();
+    if (!folderName || folderName.startsWith('.')) {
+        return false;
+    }
+
+    return !EXCLUDED_FOLDER_NAMES.has(folderName);
+};
+
 const buildFolderTableMarkdown = (folders, currentPath) => {
     const links = sortFoldersNumerically(folders)
         .map((folder) => `[${folder.name}](${buildFolderUrl(currentPath, folder.name)})`);
 
     const tableLines = [
-        '| العمود 1 | العمود 2 | العمود 3 |',
+        '|   |   |   |',
         '| --- | --- | --- |'
     ];
 
@@ -106,7 +120,7 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                         try {
                             const foldersResponse = await axios.get(folderApi);
                             const folders = Array.isArray(foldersResponse.data)
-                                ? foldersResponse.data.filter((item) => item.type === 'dir')
+                                ? foldersResponse.data.filter((item) => item.type === 'dir' && shouldIncludeFolder(item))
                                 : [];
 
                             markdownText = replaceFolderListToken(markdownText, folders, path);
@@ -184,8 +198,17 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                                 </div>
 
                                 {/* Add some left padding to make room for the button */}
-                                <div style={{ paddingLeft: '2rem' }}>
-                                    <Markdown remarkPlugins={[remarkGfm]}>{section.markdown}</Markdown>
+                                <div className="markdown-content" style={{ paddingLeft: '2rem' }}>
+                                    <Markdown
+                                        remarkPlugins={[remarkGfm]}
+                                        components={{
+                                            table: ({ ...props }) => <table className="readme-folder-table" {...props} />,
+                                            th: ({ ...props }) => <th className="readme-folder-table-th" {...props} />,
+                                            td: ({ ...props }) => <td className="readme-folder-table-td" {...props} />
+                                        }}
+                                    >
+                                        {section.markdown}
+                                    </Markdown>
                                 </div>
                             </div>
                         ))}

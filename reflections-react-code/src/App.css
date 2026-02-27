@@ -40,6 +40,42 @@ img {
   }
 }
 
+.markdown-content .readme-folder-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.markdown-content .readme-folder-table thead {
+  display: none;
+}
+
+.markdown-content .readme-folder-table-th,
+.markdown-content .readme-folder-table-td {
+  width: 33.33%;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .markdown-content .readme-folder-table,
+  .markdown-content .readme-folder-table tbody,
+  .markdown-content .readme-folder-table tr,
+  .markdown-content .readme-folder-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .markdown-content .readme-folder-table tr {
+    margin-bottom: 0.75rem;
+  }
+
+  .markdown-content .readme-folder-table-td {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}
+
 .App-header {
   background-color: #282c34;
   min-height: 100vh;
