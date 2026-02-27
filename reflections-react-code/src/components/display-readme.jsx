@@ -7,6 +7,85 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GITHUB } from '../constants';
 
+const FOLDER_LIST_TOKEN_REGEX = /\{\{\s*folderList\s*\}\}/gi;
+const REPO_CONTENTS_API_BASE = 'https://api.github.com/repos/alialiayman/reflections/contents';
+const SITE_BASE_URL = 'https://a-reflections.web.app';
+
+const getLeadingNumber = (name) => {
+    const match = name.match(/^\s*(\d+)/);
+    return match ? Number.parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+};
+
+const toRouteSlug = (folderName) => {
+    const withoutOrderPrefix = folderName.replace(/^\s*\d+\s*[-_.]?\s*/, '').trim();
+    return withoutOrderPrefix.replace(/\s+/g, '-').toLowerCase();
+};
+
+const toEncodedRepoPath = (path) => {
+    const trimmed = path.replace(/^\/+|\/+$/g, '');
+    if (!trimmed) {
+        return '';
+    }
+
+    return trimmed
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
+};
+
+const buildFolderUrl = (currentPath, folderName) => {
+    const parentPath = currentPath.replace(/\/+$/g, '');
+    const slug = toRouteSlug(folderName);
+
+    if (!parentPath || parentPath === '/') {
+        return `${SITE_BASE_URL}/${slug}`;
+    }
+
+    return `${SITE_BASE_URL}${parentPath}/${slug}`;
+};
+
+const sortFoldersNumerically = (folders) => {
+    return [...folders].sort((a, b) => {
+        const aNumber = getLeadingNumber(a.name);
+        const bNumber = getLeadingNumber(b.name);
+
+        if (aNumber !== bNumber) {
+            return aNumber - bNumber;
+        }
+
+        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+    });
+};
+
+const buildFolderTableMarkdown = (folders, currentPath) => {
+    const links = sortFoldersNumerically(folders)
+        .map((folder) => `[${folder.name}](${buildFolderUrl(currentPath, folder.name)})`);
+
+    const tableLines = [
+        '| العمود 1 | العمود 2 | العمود 3 |',
+        '| --- | --- | --- |'
+    ];
+
+    for (let index = 0; index < links.length; index += 3) {
+        const first = links[index] || ' ';
+        const second = links[index + 1] || ' ';
+        const third = links[index + 2] || ' ';
+        tableLines.push(`| ${first} | ${second} | ${third} |`);
+    }
+
+    return tableLines.join('\n');
+};
+
+const replaceFolderListToken = (markdownText, folders, currentPath) => {
+    if (!FOLDER_LIST_TOKEN_REGEX.test(markdownText)) {
+        return markdownText;
+    }
+
+    const tableMarkdown = buildFolderTableMarkdown(folders, currentPath);
+    return markdownText.replace(FOLDER_LIST_TOKEN_REGEX, tableMarkdown);
+};
+
 
 const DisplayReadme = ({ path, filename = 'README.md' }) => {
     const [error, setError] = useState(null);
@@ -16,9 +95,27 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
         if (path && filename) {
             const url = `${GITHUB}${path.endsWith('/') ? path : path + '/'}${filename}`;
             axios.get(url, { responseType: 'text' })
-                .then((response) => {
-                    // setContent(response.data);
-                    splitSections(response.data);
+                .then(async (readmeResponse) => {
+                    let markdownText = readmeResponse.data;
+
+                    if (FOLDER_LIST_TOKEN_REGEX.test(markdownText)) {
+                        const encodedPath = toEncodedRepoPath(path);
+                        const folderApi = encodedPath
+                            ? `${REPO_CONTENTS_API_BASE}/${encodedPath}?ref=main`
+                            : `${REPO_CONTENTS_API_BASE}?ref=main`;
+                        try {
+                            const foldersResponse = await axios.get(folderApi);
+                            const folders = Array.isArray(foldersResponse.data)
+                                ? foldersResponse.data.filter((item) => item.type === 'dir')
+                                : [];
+
+                            markdownText = replaceFolderListToken(markdownText, folders, path);
+                        } catch {
+                            markdownText = replaceFolderListToken(markdownText, [], path);
+                        }
+                    }
+
+                    splitSections(markdownText);
                 })
                 .catch(() => setError(`${filename} not found`));
         } else {
