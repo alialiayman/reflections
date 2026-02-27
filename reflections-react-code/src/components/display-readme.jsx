@@ -14,6 +14,8 @@ const SITE_BASE_URL = 'https://a-reflections.web.app';
 const EXCLUDED_FOLDER_NAMES = new Set(['reflections-react-code']);
 const FOLDER_LIST_FALLBACK = '⚠️ تعذر تحميل قائمة المجلدات من GitHub حالياً.';
 const FOLDER_SUBTITLE_TOKEN = '[[FOLDER_SUBTITLE]]';
+const FOLDER_SUBTITLE_TOKEN_REGEX = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/i;
+const FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/gi;
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -179,14 +181,55 @@ const replaceFolderListWithFallback = (markdownText) => {
     return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, FOLDER_LIST_FALLBACK);
 };
 
+const extractTokenParts = (text) => {
+    if (typeof text !== 'string') {
+        return null;
+    }
+
+    const match = text.match(FOLDER_SUBTITLE_TOKEN_REGEX);
+    if (!match || typeof match.index !== 'number') {
+        return null;
+    }
+
+    const beforeToken = text.slice(0, match.index);
+    const afterToken = text.slice(match.index + match[0].length);
+    return { beforeToken, afterToken };
+};
+
+const sanitizeTokenTextInNode = (node) => {
+    if (typeof node === 'string') {
+        return node.replace(FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL, ' ').replace(/\s{2,}/g, ' ');
+    }
+
+    if (!React.isValidElement(node)) {
+        return node;
+    }
+
+    const elementChildren = node.props?.children;
+    if (elementChildren == null) {
+        return node;
+    }
+
+    return React.cloneElement(node, {
+        ...node.props,
+        children: React.Children.map(elementChildren, (child) => sanitizeTokenTextInNode(child))
+    });
+};
+
 const FolderListTableCell = ({ children, ...props }) => {
     const childNodes = React.Children.toArray(children);
     let subtitle = '';
     const titleNodes = [];
 
     childNodes.forEach((child) => {
-        if (typeof child === 'string' && child.includes(FOLDER_SUBTITLE_TOKEN)) {
-            const [beforeToken, afterToken] = child.split(FOLDER_SUBTITLE_TOKEN);
+        if (typeof child === 'string') {
+            const tokenParts = extractTokenParts(child);
+            if (!tokenParts) {
+                titleNodes.push(sanitizeTokenTextInNode(child));
+                return;
+            }
+
+            const { beforeToken, afterToken } = tokenParts;
             if (beforeToken && beforeToken.trim()) {
                 titleNodes.push(beforeToken);
             }
@@ -194,7 +237,7 @@ const FolderListTableCell = ({ children, ...props }) => {
             return;
         }
 
-        titleNodes.push(child);
+        titleNodes.push(sanitizeTokenTextInNode(child));
     });
 
     if (!subtitle) {
