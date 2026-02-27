@@ -13,6 +13,7 @@ const REPO_CONTENTS_API_BASE = 'https://api.github.com/repos/alialiayman/reflect
 const SITE_BASE_URL = 'https://a-reflections.web.app';
 const EXCLUDED_FOLDER_NAMES = new Set(['reflections-react-code']);
 const FOLDER_LIST_FALLBACK = '⚠️ تعذر تحميل قائمة المجلدات من GitHub حالياً.';
+const FOLDER_SUBTITLE_TOKEN = '[[FOLDER_SUBTITLE]]';
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -47,6 +48,16 @@ const buildFolderUrl = (currentPath, folderName) => {
     return `${SITE_BASE_URL}${parentPath}/${slug}`;
 };
 
+const buildFolderReadmeUrl = (currentPath, folderName) => {
+    const encodedPath = toEncodedRepoPath(currentPath);
+    const encodedFolderName = encodeURIComponent(folderName.trim());
+    const relativeReadmePath = encodedPath
+        ? `${encodedPath}/${encodedFolderName}/README.md`
+        : `${encodedFolderName}/README.md`;
+
+    return `${GITHUB}/${relativeReadmePath}`;
+};
+
 const sortFoldersNumerically = (folders) => {
     return [...folders].sort((a, b) => {
         const aNumber = getLeadingNumber(a.name);
@@ -73,9 +84,66 @@ const shouldIncludeFolder = (folder) => {
     return !EXCLUDED_FOLDER_NAMES.has(folderName);
 };
 
+const toDisplayTitle = (folderName) => {
+    return folderName.replace(/^\s*\d+\s*[-_.]?\s*/, '').trim();
+};
+
+const extractFirstReadmeLine = (markdownText) => {
+    if (typeof markdownText !== 'string') {
+        return '';
+    }
+
+    const firstLine = markdownText
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => line.length > 0);
+
+    if (!firstLine) {
+        return '';
+    }
+
+    const cleaned = firstLine
+        .replace(/^#{1,6}\s*/, '')
+        .replace(/^[-*+]\s+/, '')
+        .replace(/^\d+\.\s+/, '')
+        .replace(/\|/g, '\\|')
+        .trim();
+
+    return cleaned;
+};
+
+const fetchFolderSubtitles = async (folders, currentPath) => {
+    const folderEntries = await Promise.all(
+        folders.map(async (folder) => {
+            try {
+                const readmeUrl = buildFolderReadmeUrl(currentPath, folder.name);
+                const response = await axios.get(readmeUrl, { responseType: 'text' });
+                return {
+                    ...folder,
+                    subtitle: extractFirstReadmeLine(response.data)
+                };
+            } catch {
+                return {
+                    ...folder,
+                    subtitle: ''
+                };
+            }
+        })
+    );
+
+    return folderEntries;
+};
+
 const buildFolderTableMarkdown = (folders, currentPath) => {
     const links = sortFoldersNumerically(folders)
-        .map((folder) => `[${folder.name}](${buildFolderUrl(currentPath, folder.name)})`);
+        .map((folder) => {
+            const title = `[${toDisplayTitle(folder.name)}](${buildFolderUrl(currentPath, folder.name)})`;
+            if (!folder.subtitle) {
+                return title;
+            }
+
+            return `${title} ${FOLDER_SUBTITLE_TOKEN} ${folder.subtitle}`;
+        });
 
     const tableLines = [
         '|   |   |   |',
@@ -111,6 +179,36 @@ const replaceFolderListWithFallback = (markdownText) => {
     return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, FOLDER_LIST_FALLBACK);
 };
 
+const FolderListTableCell = ({ children, ...props }) => {
+    const childNodes = React.Children.toArray(children);
+    let subtitle = '';
+    const titleNodes = [];
+
+    childNodes.forEach((child) => {
+        if (typeof child === 'string' && child.includes(FOLDER_SUBTITLE_TOKEN)) {
+            const [beforeToken, afterToken] = child.split(FOLDER_SUBTITLE_TOKEN);
+            if (beforeToken && beforeToken.trim()) {
+                titleNodes.push(beforeToken);
+            }
+            subtitle = (afterToken || '').trim();
+            return;
+        }
+
+        titleNodes.push(child);
+    });
+
+    if (!subtitle) {
+        return <td className="readme-folder-table-td" {...props}>{children}</td>;
+    }
+
+    return (
+        <td className="readme-folder-table-td" {...props}>
+            <div className="folder-cell-title">{titleNodes}</div>
+            <div className="folder-cell-subtitle">{subtitle}</div>
+        </td>
+    );
+};
+
 
 const DisplayReadme = ({ path, filename = 'README.md' }) => {
     const [error, setError] = useState(null);
@@ -139,7 +237,9 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                             const folders = foldersResponse.data
                                 .filter((item) => item.type === 'dir' && shouldIncludeFolder(item));
 
-                            markdownText = replaceFolderListToken(markdownText, folders, path);
+                            const foldersWithSubtitles = await fetchFolderSubtitles(folders, path);
+
+                            markdownText = replaceFolderListToken(markdownText, foldersWithSubtitles, path);
                         } catch {
                             markdownText = replaceFolderListWithFallback(markdownText);
                         }
@@ -220,7 +320,7 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                                         components={{
                                             table: ({ ...props }) => <table className="readme-folder-table" {...props} />,
                                             th: ({ ...props }) => <th className="readme-folder-table-th" {...props} />,
-                                            td: ({ ...props }) => <td className="readme-folder-table-td" {...props} />
+                                            td: ({ children, ...props }) => <FolderListTableCell {...props}>{children}</FolderListTableCell>
                                         }}
                                     >
                                         {section.markdown}
