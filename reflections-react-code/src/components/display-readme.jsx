@@ -7,10 +7,12 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GITHUB } from '../constants';
 
-const FOLDER_LIST_TOKEN_REGEX = /\{\{\s*folderList\s*\}\}/gi;
+const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
+const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
 const REPO_CONTENTS_API_BASE = 'https://api.github.com/repos/alialiayman/reflections/contents';
 const SITE_BASE_URL = 'https://a-reflections.web.app';
 const EXCLUDED_FOLDER_NAMES = new Set(['reflections-react-code']);
+const FOLDER_LIST_FALLBACK = '⚠️ تعذر تحميل قائمة المجلدات من GitHub حالياً.';
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -18,8 +20,7 @@ const getLeadingNumber = (name) => {
 };
 
 const toRouteSlug = (folderName) => {
-    const withoutOrderPrefix = folderName.replace(/^\s*\d+\s*[-_.]?\s*/, '').trim();
-    return withoutOrderPrefix.replace(/\s+/g, '-').toLowerCase();
+    return encodeURIComponent(folderName.trim());
 };
 
 const toEncodedRepoPath = (path) => {
@@ -91,13 +92,23 @@ const buildFolderTableMarkdown = (folders, currentPath) => {
     return tableLines.join('\n');
 };
 
+const hasFolderListToken = (markdownText) => FOLDER_LIST_TOKEN_DETECT_REGEX.test(markdownText);
+
 const replaceFolderListToken = (markdownText, folders, currentPath) => {
-    if (!FOLDER_LIST_TOKEN_REGEX.test(markdownText)) {
+    if (!hasFolderListToken(markdownText)) {
         return markdownText;
     }
 
     const tableMarkdown = buildFolderTableMarkdown(folders, currentPath);
-    return markdownText.replace(FOLDER_LIST_TOKEN_REGEX, tableMarkdown);
+    return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, tableMarkdown);
+};
+
+const replaceFolderListWithFallback = (markdownText) => {
+    if (!hasFolderListToken(markdownText)) {
+        return markdownText;
+    }
+
+    return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, FOLDER_LIST_FALLBACK);
 };
 
 
@@ -112,20 +123,25 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                 .then(async (readmeResponse) => {
                     let markdownText = readmeResponse.data;
 
-                    if (FOLDER_LIST_TOKEN_REGEX.test(markdownText)) {
+                    if (hasFolderListToken(markdownText)) {
                         const encodedPath = toEncodedRepoPath(path);
                         const folderApi = encodedPath
                             ? `${REPO_CONTENTS_API_BASE}/${encodedPath}?ref=main`
                             : `${REPO_CONTENTS_API_BASE}?ref=main`;
                         try {
                             const foldersResponse = await axios.get(folderApi);
-                            const folders = Array.isArray(foldersResponse.data)
-                                ? foldersResponse.data.filter((item) => item.type === 'dir' && shouldIncludeFolder(item))
-                                : [];
+                            if (!Array.isArray(foldersResponse.data)) {
+                                markdownText = replaceFolderListWithFallback(markdownText);
+                                splitSections(markdownText);
+                                return;
+                            }
+
+                            const folders = foldersResponse.data
+                                .filter((item) => item.type === 'dir' && shouldIncludeFolder(item));
 
                             markdownText = replaceFolderListToken(markdownText, folders, path);
                         } catch {
-                            markdownText = replaceFolderListToken(markdownText, [], path);
+                            markdownText = replaceFolderListWithFallback(markdownText);
                         }
                     }
 
