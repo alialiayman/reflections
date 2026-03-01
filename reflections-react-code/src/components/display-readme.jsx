@@ -22,32 +22,48 @@ const getLeadingNumber = (name) => {
     return match ? Number.parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
 };
 
+const safelyDecodeURIComponent = (value) => {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+};
+
+const getNormalizedPathSegments = (path) => {
+    return path
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => safelyDecodeURIComponent(segment).trim())
+        .filter(Boolean);
+};
+
 const toRouteSlug = (folderName) => {
     return encodeURIComponent(folderName.trim());
 };
 
 const toEncodedRepoPath = (path) => {
-    const trimmed = path.replace(/^\/+|\/+$/g, '');
-    if (!trimmed) {
+    const segments = getNormalizedPathSegments(path);
+    if (!segments.length) {
         return '';
     }
 
-    return trimmed
-        .split('/')
-        .filter(Boolean)
+    return segments
         .map((segment) => encodeURIComponent(segment))
         .join('/');
 };
 
 const buildFolderUrl = (currentPath, folderName) => {
-    const parentPath = currentPath.replace(/\/+$/g, '');
+    const normalizedParentPath = getNormalizedPathSegments(currentPath)
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
     const slug = toRouteSlug(folderName);
 
-    if (!parentPath || parentPath === '/') {
+    if (!normalizedParentPath) {
         return `${SITE_BASE_URL}/${slug}`;
     }
 
-    return `${SITE_BASE_URL}${parentPath}/${slug}`;
+    return `${SITE_BASE_URL}/${normalizedParentPath}/${slug}`;
 };
 
 const buildFolderReadmeUrl = (currentPath, folderName) => {
