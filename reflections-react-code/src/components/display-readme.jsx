@@ -337,6 +337,10 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
             }
         });
 
+        if (!sectionsArr.length && markdownText.trim()) {
+            sectionsArr.push({ heading: '', markdown: markdownText.trim() });
+        }
+
         setSections(sectionsArr);
     };
 
