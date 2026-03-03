@@ -3,6 +3,7 @@ import GitHubIcon from "@mui/icons-material/GitHub";
 import HomeIcon from "@mui/icons-material/Home";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import TranslateIcon from "@mui/icons-material/Translate";
+import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
   Alert,
   AppBar,
@@ -26,6 +27,8 @@ const Header = ({
   copyIndex,
   textChunks,
   loading,
+  previewMode,
+  onTogglePreview,
   ...props
 }) => {
   const theme = useTheme();
@@ -124,6 +127,15 @@ const Header = ({
                   <TranslateIcon />
                 </Tooltip>
               </IconButton>
+              <IconButton
+                color="inherit"
+                aria-label="Toggle Preview"
+                onClick={onTogglePreview}
+              >
+                <Tooltip title={previewMode ? "Show README" : "EPUB-like Preview"}>
+                  <VisibilityIcon />
+                </Tooltip>
+              </IconButton>
             </div>
           ) : (
             <>
@@ -169,6 +181,15 @@ const Header = ({
                 >
                   <Tooltip title="Translate to English">
                     <TranslateIcon />
+                  </Tooltip>
+                </IconButton>
+                <IconButton
+                  color="inherit"
+                  aria-label="Toggle Preview"
+                  onClick={onTogglePreview}
+                >
+                  <Tooltip title={previewMode ? "Show README" : "EPUB-like Preview"}>
+                    <VisibilityIcon />
                   </Tooltip>
                 </IconButton>
                 <IconButton

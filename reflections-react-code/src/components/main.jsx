@@ -1,11 +1,12 @@
 import { Typography } from "@mui/material";
 import DisplayReadme from "./display-readme";
+import EpubPreview from "./epub-preview";
 
-export default function Main() {
+export default function Main({ previewMode, images }) {
   const path = window.location.pathname;
   return (
     <div id="readme">
-      <DisplayReadme path={path} />
+      {previewMode ? <EpubPreview path={path} images={images} /> : <DisplayReadme path={path} />}
       <Typography
         variant="caption"
         color="textSecondary"

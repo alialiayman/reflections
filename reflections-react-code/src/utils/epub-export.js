@@ -385,9 +385,70 @@ const resolveSectionImageMiddleRatio = (
   return clamp(ratio, 0, 1);
 };
 
+const getTargetTranslationLanguage = () => {
+  const query = window.location.search;
+  const match = query.match(/(?:\?|&)_x_tr_tl=([^&]+)/i);
+
+  if (!match?.[1]) {
+    return "";
+  }
+
+  return decodeURIComponent(match[1]).trim().toLowerCase();
+};
+
+const shouldUseTranslatedMarkdown = () => {
+  const targetLanguage = getTargetTranslationLanguage();
+  return (
+    window.location.hostname.includes("translate.goog") &&
+    Boolean(targetLanguage) &&
+    targetLanguage !== "ar"
+  );
+};
+
+const buildTranslateProxyUrl = (sourceUrl, targetLanguage) => {
+  const parsed = new URL(sourceUrl);
+  const translatedHost = `${parsed.hostname
+    .replaceAll("-", "--")
+    .replaceAll(".", "-")}.translate.goog`;
+  const translatedUrl = new URL(
+    `https://${translatedHost}${parsed.pathname}${parsed.search}`
+  );
+
+  translatedUrl.searchParams.set("_x_tr_sl", "ar");
+  translatedUrl.searchParams.set("_x_tr_tl", targetLanguage);
+  translatedUrl.searchParams.set("_x_tr_hl", targetLanguage);
+  translatedUrl.searchParams.set("_x_tr_pto", "wapp");
+
+  return translatedUrl.toString();
+};
+
+const resolveEpubLanguage = () => {
+  const translatedLanguage = getTargetTranslationLanguage();
+  if (translatedLanguage && translatedLanguage !== "ar") {
+    return translatedLanguage;
+  }
+
+  return DEFAULT_EPUB_METADATA.language;
+};
+
 const fetchMarkdown = async (path) => {
   const normalizedPath = path === "/" ? "" : path;
   const readmeUrl = `${GITHUB}${normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`}README.md`;
+  if (shouldUseTranslatedMarkdown()) {
+    try {
+      const translatedReadmeUrl = buildTranslateProxyUrl(
+        readmeUrl,
+        getTargetTranslationLanguage()
+      );
+      const translatedResponse = await fetch(translatedReadmeUrl);
+      if (translatedResponse.ok) {
+        return translatedResponse.text();
+      }
+    } catch {
+      // Fallback to the original markdown source below.
+    }
+  }
+
   const response = await fetch(readmeUrl);
 
   if (!response.ok) {
@@ -395,6 +456,87 @@ const fetchMarkdown = async (path) => {
   }
 
   return response.text();
+};
+
+const resolveDefaultTitleFromPath = (path = "") =>
+  path === "/"
+    ? "تأملات"
+    : decodeURIComponent(path.replaceAll("/", "").trim()) || "تأملات";
+
+const buildSectionPreviewFigureHtml = (image) =>
+  `<figure style="text-align:center;"><img src="${escapeXml(
+    image.url
+  )}" alt="${escapeXml(image.name)}" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
+    stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
+      fileNameWithoutExtension(image.name)
+  )}</figcaption></figure>`;
+
+export const buildEpubLikePreview = async ({
+  path,
+  images,
+  sectionImageMiddleRatio,
+}) => {
+  const markdown = await fetchMarkdown(path);
+  const sections = splitMarkdownSections(markdown);
+  const firstHeaderTitle = extractFirstMarkdownHeader(markdown);
+  const resolvedSectionImageMiddleRatio = resolveSectionImageMiddleRatio(
+    sectionImageMiddleRatio
+  );
+
+  const coverImage = images.find(
+    (image) => normalizeImageLabel(image.name) === "cover"
+  );
+  const backCoverImage = images.find(
+    (image) => normalizeImageLabel(image.name) === "back cover"
+  );
+
+  const contentImages = images.filter(
+    (image) => image !== coverImage && image !== backCoverImage
+  );
+
+  const mappedImages = mapImagesToSections(contentImages, sections.length);
+  const imagesBySection = new Map();
+
+  mappedImages.forEach((image) => {
+    const current = imagesBySection.get(image.sectionIndex) || [];
+    imagesBySection.set(image.sectionIndex, [...current, image]);
+  });
+
+  const title = firstHeaderTitle || resolveDefaultTitleFromPath(path);
+  const domPurify = createDOMPurify(window);
+
+  const sectionPreviews = sections.map((section, index) => {
+    const sectionImages = imagesBySection.get(index) || [];
+    const distributedImages = distributeImagesInSection(
+      sectionImages,
+      resolvedSectionImageMiddleRatio
+    );
+    const middleImagesHtml = distributedImages.middle
+      .map((image) => buildSectionPreviewFigureHtml(image))
+      .join("\n");
+    const endImagesHtml = distributedImages.end
+      .map((image) => buildSectionPreviewFigureHtml(image))
+      .join("\n");
+
+    const markdownWithMiddleImages = injectHtmlAtMarkdownMidpoint(
+      section.markdown,
+      middleImagesHtml
+    );
+
+    const sectionHtml = domPurify.sanitize(
+      marked.parse(markdownWithMiddleImages, { xhtml: true })
+    );
+
+    return {
+      heading: section.heading,
+      html: `${sectionHtml}${endImagesHtml ? `\n${endImagesHtml}` : ""}`,
+    };
+  });
+
+  return {
+    title,
+    sections: sectionPreviews,
+  };
 };
 
 const fetchImageBlob = async (url) => {
@@ -480,11 +622,7 @@ export const exportFolderToEpub = async ({
     imagesBySection.set(image.sectionIndex, [...current, image]);
   });
 
-  const title =
-    firstHeaderTitle ||
-    (path === "/"
-      ? "تأملات"
-      : decodeURIComponent(path.replaceAll("/", "").trim()) || "تأملات");
+  const title = firstHeaderTitle || resolveDefaultTitleFromPath(path);
   const identifier = generateIsbnLikeIdentifier();
   const description = extractFirstMarkdownParagraph(markdown);
   const createdDate = new Date().toISOString().slice(0, 10);
@@ -492,6 +630,7 @@ export const exportFolderToEpub = async ({
   const copyrightYear = new Date().getFullYear();
   const epubMetadata = {
     ...DEFAULT_EPUB_METADATA,
+    language: resolveEpubLanguage(),
     rights: `© ${copyrightYear} ${DEFAULT_EPUB_METADATA.creator}. جميع الحقوق محفوظة.`,
     description,
   };

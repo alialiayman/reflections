@@ -1,4 +1,4 @@
-import { Container, Dialog } from "@mui/material";
+import { Alert, Container, Dialog, Snackbar } from "@mui/material";
 import { useEffect, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
@@ -23,6 +23,12 @@ function App() {
   const [images, setImages] = useState([]);
   const [open, setOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [copyToast, setCopyToast] = useState({
+    open: false,
+    message: "",
+    severity: "info",
+  });
   const path = window.location.pathname;
 
   useEffect(() => {
@@ -92,26 +98,57 @@ function App() {
     }
     return chunks;
   };
+
+  const getCurrentVisibleChunks = () => {
+    const readmeDiv = document.getElementById("readme");
+    const fullText = readmeDiv?.innerText?.trim() || "";
+
+    if (!fullText) {
+      return [];
+    }
+
+    return splitTextIntoChunks(fullText);
+  };
+
   const handleCopy = () => {
-    if (textChunks.length === 0) {
-      alert("No content to copy");
+    const visibleChunks = getCurrentVisibleChunks();
+    setTextChunks(visibleChunks);
+
+    if (visibleChunks.length === 0) {
+      setCopyToast({
+        open: true,
+        message: "No content to copy",
+        severity: "warning",
+      });
       return;
     }
 
-    if (copyIndex >= textChunks.length) {
-      alert("All text has been copied!");
+    if (copyIndex >= visibleChunks.length) {
+      setCopyToast({
+        open: true,
+        message: "All text has been copied!",
+        severity: "info",
+      });
       setCopyIndex(0); // Reset index to allow copying again
       return;
     }
 
     navigator.clipboard
-      .writeText(textChunks[copyIndex])
+      .writeText(visibleChunks[copyIndex])
       .then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 3000);
         setCopyIndex(copyIndex + 1); // Move to the next chunk for the next copy
       })
       .catch((err) => console.error("Failed to copy:", err));
+  };
+
+  const handleCloseCopyToast = (_, reason) => {
+    if (reason === "clickaway") {
+      return;
+    }
+
+    setCopyToast((current) => ({ ...current, open: false }));
   };
 
   
@@ -136,10 +173,12 @@ function App() {
         images={images}
         handleClickOpen={handleClickOpen}
         loading={loadingChunks}
+        previewMode={previewMode}
+        onTogglePreview={() => setPreviewMode((current) => !current)}
       />
       <div id="print-header" style={{display: 'none'}}></div>
       <Container p={2} mt={2}>
-        <Main />
+        <Main previewMode={previewMode} images={images} />
       </Container>
 
       {/* Modal for Enlarged Image */}
@@ -156,6 +195,22 @@ function App() {
           />
         )}
       </Dialog>
+
+      <Snackbar
+        open={copyToast.open}
+        autoHideDuration={3000}
+        onClose={handleCloseCopyToast}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={handleCloseCopyToast}
+          severity={copyToast.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {copyToast.message}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
