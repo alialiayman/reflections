@@ -567,13 +567,13 @@ export const exportFolderToEpub = async ({
         heading: "الغلاف",
         xhtml: buildXhtml(
           "الغلاف",
-          `    <section id="cover" style="text-align:center;max-width:780px;margin:0 auto;padding:1rem 0.2rem;">${coverTopSvg}<h1 style="margin:0 0 0.65rem 0;">${escapeXml(
+          `    <section id="cover" style="text-align:center;max-width:780px;margin:0 auto;padding:1rem 0.2rem;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;">${coverTopSvg}<h1 style="margin:0 0 0.5rem 0;font-size:1.25em;line-height:1.35;">${escapeXml(
             title
-          )}</h1><p style="margin:0 0 1rem 0;font-size:0.95em;opacity:0.8;">رقم الكتاب: ${escapeXml(
+          )}</h1><p style="margin:0 0 0.85rem 0;font-size:0.72em;opacity:0.78;">رقم الكتاب: ${escapeXml(
             identifier
           )}</p><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
             title
-          )}" style="max-width:100%;height:auto;border-radius:10px;" /><div style="text-align:right;margin-top:1.2rem;line-height:1.85;"><p><strong>المؤلف:</strong> ${escapeXml(
+          )}" style="max-width:100%;height:auto;border-radius:10px;" /><div style="text-align:center;margin-top:1rem;line-height:1.6;font-size:0.72em;max-width:640px;"><p><strong>المؤلف:</strong> ${escapeXml(
             epubMetadata.creator
           )}</p><p><strong>الناشر:</strong> ${escapeXml(
             epubMetadata.publisher

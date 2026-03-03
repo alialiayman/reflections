@@ -1,4 +1,6 @@
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import Alert from '@mui/material/Alert';
+import Snackbar from '@mui/material/Snackbar';
 import { Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import axios from 'axios';
@@ -197,6 +199,15 @@ const replaceFolderListWithFallback = (markdownText) => {
     return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, FOLDER_LIST_FALLBACK);
 };
 
+const extractFirstHeadingText = (markdownText) => {
+    if (typeof markdownText !== 'string') {
+        return '';
+    }
+
+    const headingMatch = markdownText.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/m);
+    return headingMatch?.[1]?.trim() || '';
+};
+
 const extractTokenParts = (text) => {
     if (typeof text !== 'string') {
         return null;
@@ -273,6 +284,11 @@ const FolderListTableCell = ({ children, ...props }) => {
 const DisplayReadme = ({ path, filename = 'README.md' }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
+    const [snackbarState, setSnackbarState] = useState({
+        open: false,
+        message: '',
+        severity: 'success'
+    });
 
     useEffect(() => {
         if (path && filename) {
@@ -304,6 +320,9 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                             markdownText = replaceFolderListWithFallback(markdownText);
                         }
                     }
+
+                    const firstHeading = extractFirstHeadingText(markdownText);
+                    document.title = firstHeading || filename;
 
                     splitSections(markdownText);
                 })
@@ -344,10 +363,29 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
         setSections(sectionsArr);
     };
 
-    const handleCopy = (text) => {
-        navigator.clipboard.writeText(text).then(() => {
-            alert('Section copied to clipboard!');
-        });
+    const handleSnackbarClose = (_, reason) => {
+        if (reason === 'clickaway') {
+            return;
+        }
+
+        setSnackbarState((previousState) => ({ ...previousState, open: false }));
+    };
+
+    const handleCopy = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setSnackbarState({
+                open: true,
+                message: 'Section copied to clipboard!',
+                severity: 'success'
+            });
+        } catch {
+            setSnackbarState({
+                open: true,
+                message: 'Failed to copy section.',
+                severity: 'error'
+            });
+        }
     };
     return (
         <div>
@@ -396,6 +434,16 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
 
                 </div>
             )}
+            <Snackbar
+                open={snackbarState.open}
+                autoHideDuration={3000}
+                onClose={handleSnackbarClose}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            >
+                <Alert onClose={handleSnackbarClose} severity={snackbarState.severity} sx={{ width: '100%' }}>
+                    {snackbarState.message}
+                </Alert>
+            </Snackbar>
         </div>
     );
 };
