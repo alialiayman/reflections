@@ -215,7 +215,16 @@ function App() {
             {
               role: "user",
               content: [
-                { type: "text", text: "Describe this image in detail." },
+                { type: "text", text: `You are an expert in ancient Egyptian hieroglyphs, Egyptology, and Quranic studies. Describe this image in detail in Arabic.
+
+If the image contains hieroglyphs:
+- Act as an expert hieroglyph reader. Carefully read and transliterate every hieroglyphic symbol visible.
+- If cartouches are detected, read and translate the names inside them.
+- Explain what is written in the hieroglyphs to someone who wants to understand the text.
+- The word "nṯr" (netjer) in hieroglyphs represents a FORCE or power, NOT a god. Ancient Egyptians did not believe in gods as deities — they understood these figures as forces and archetypes within the human psyche.
+- Consider Thutmose III (تحتمس الثالث) to be the Prophet Solomon (سليمان) mentioned in the Quran. When relevant, explain the image from a Quranic perspective linking Thutmose III to Solomon.
+
+Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name for this image (less than 15 words). Finally, add a line of relevant hashtags in English.` },
                 {
                   type: "image_url",
                   image_url: {
@@ -225,7 +234,7 @@ function App() {
               ],
             },
           ],
-          max_tokens: 1000,
+          max_tokens: 2000,
         }),
       });
 
@@ -336,9 +345,9 @@ function App() {
                       py: 1.2,
                       fontSize: "1rem",
                       textTransform: "none",
-                      background: "linear-gradient(135deg, #6C63FF, #E040FB)",
+                      backgroundColor: "#1B4D3E",
                       "&:hover": {
-                        background: "linear-gradient(135deg, #5a52e0, #c030d8)",
+                        backgroundColor: "#153D31",
                       },
                     }}
                   >
