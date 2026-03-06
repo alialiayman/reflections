@@ -1,8 +1,20 @@
-import { Alert, Container, Dialog, Snackbar } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  Dialog,
+  DialogContent,
+  Snackbar,
+  Typography,
+} from "@mui/material";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import { useEffect, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
+import { getVisionKey } from "./constants";
 
 const DEFAULT_COPY_LIMIT = 3500;
 
@@ -24,6 +36,20 @@ function App() {
   const [open, setOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewMode, setPreviewMode] = useState(false);
+  const [imageDescription, setImageDescription] = useState("");
+  const [describingImage, setDescribingImage] = useState(false);
+  const [borderColorIndex, setBorderColorIndex] = useState(0);
+  const [imageHover, setImageHover] = useState(false);
+
+  const borderColors = [
+    "#6C63FF",
+    "#00BFA6",
+    "#FF6F61",
+    "#FFD600",
+    "#448AFF",
+    "#E040FB",
+    "#FF9100",
+  ];
   const [copyToast, setCopyToast] = useState({
     open: false,
     message: "",
@@ -160,6 +186,60 @@ function App() {
   const handleClose = () => {
     setOpen(false);
     setSelectedImage(null);
+    setImageDescription("");
+  };
+
+  const handleDescribeImage = async () => {
+    if (!selectedImage) return;
+    setDescribingImage(true);
+    setImageDescription("");
+    try {
+      const imgResponse = await fetch(selectedImage);
+      const blob = await imgResponse.blob();
+      const base64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(",")[1]);
+        reader.readAsDataURL(blob);
+      });
+
+      const mimeType = blob.type || "image/png";
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getVisionKey()}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Describe this image in detail." },
+                {
+                  type: "image_url",
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64}`,
+                  },
+                },
+              ],
+            },
+          ],
+          max_tokens: 1000,
+        }),
+      });
+
+      const data = await res.json();
+      setImageDescription(
+        data.choices?.[0]?.message?.content || "No description returned."
+      );
+      setBorderColorIndex((prev) => (prev + 1) % borderColors.length);
+    } catch (err) {
+      console.error("Failed to describe image:", err);
+      setImageDescription("Error: could not describe image.");
+    } finally {
+      setDescribingImage(false);
+    }
   };
 
   return (
@@ -182,18 +262,131 @@ function App() {
       </Container>
 
       {/* Modal for Enlarged Image */}
-      <Dialog open={open} onClose={handleClose}>
-        {selectedImage && (
-          <img
-            src={selectedImage}
-            alt="Large Illustration"
-            style={{
-              maxWidth: "100%",
-              maxHeight: "90vh",
-              objectFit: "contain",
+      <Dialog
+        open={open}
+        onClose={handleClose}
+        maxWidth={imageDescription ? "lg" : "md"}
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            overflow: "hidden",
+            background: "#1a1a2e",
+          },
+        }}
+      >
+        <DialogContent sx={{ p: 0 }}>
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: { xs: "column", md: imageDescription ? "row" : "column" },
+              minHeight: 300,
             }}
-          />
-        )}
+          >
+            {/* Image side with hover button */}
+            <Box
+              sx={{
+                position: "relative",
+                flex: imageDescription ? "0 0 50%" : "1 1 auto",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#0f0f23",
+                p: 2,
+              }}
+              onMouseEnter={() => setImageHover(true)}
+              onMouseLeave={() => setImageHover(false)}
+            >
+              {selectedImage && (
+                <img
+                  src={selectedImage}
+                  alt="Large Illustration"
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "70vh",
+                    objectFit: "contain",
+                    borderRadius: 8,
+                  }}
+                />
+              )}
+              {/* Hover overlay with button */}
+              <Box
+                sx={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(0,0,0,0.45)",
+                  opacity: imageHover || describingImage ? 1 : 0,
+                  transition: "opacity 0.3s ease",
+                  pointerEvents: imageHover || describingImage ? "auto" : "none",
+                }}
+              >
+                {describingImage ? (
+                  <CircularProgress sx={{ color: "#fff" }} />
+                ) : (
+                  <Button
+                    onClick={handleDescribeImage}
+                    variant="contained"
+                    startIcon={<AutoAwesomeIcon />}
+                    sx={{
+                      borderRadius: 8,
+                      px: 3,
+                      py: 1.2,
+                      fontSize: "1rem",
+                      textTransform: "none",
+                      background: "linear-gradient(135deg, #6C63FF, #E040FB)",
+                      "&:hover": {
+                        background: "linear-gradient(135deg, #5a52e0, #c030d8)",
+                      },
+                    }}
+                  >
+                    Describe Image
+                  </Button>
+                )}
+              </Box>
+            </Box>
+
+            {/* Description side */}
+            {imageDescription && (
+              <Box
+                sx={{
+                  flex: "1 1 50%",
+                  p: 3,
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-start",
+                  overflow: "auto",
+                  maxHeight: "75vh",
+                }}
+              >
+                <Box
+                  sx={{
+                    border: 2,
+                    borderColor: borderColors[borderColorIndex],
+                    borderRadius: 3,
+                    p: 2.5,
+                    transition: "border-color 0.5s ease",
+                    background: "rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <Typography
+                    variant="body1"
+                    sx={{
+                      color: "#e0e0e0",
+                      whiteSpace: "pre-wrap",
+                      lineHeight: 1.7,
+                      fontSize: "0.95rem",
+                    }}
+                  >
+                    {imageDescription}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
       </Dialog>
 
       <Snackbar
