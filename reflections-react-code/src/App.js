@@ -35,11 +35,12 @@ function App() {
   const [images, setImages] = useState([]);
   const [open, setOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImageName, setSelectedImageName] = useState("");
   const [previewMode, setPreviewMode] = useState(false);
   const [imageDescription, setImageDescription] = useState("");
   const [describingImage, setDescribingImage] = useState(false);
   const [borderColorIndex, setBorderColorIndex] = useState(0);
-  const [imageHover, setImageHover] = useState(false);
+
 
   const borderColors = [
     "#6C63FF",
@@ -178,14 +179,16 @@ function App() {
   };
 
   
-  const handleClickOpen = (image) => {
-    setSelectedImage(image);
+  const handleClickOpen = (imageUrl, imageName) => {
+    setSelectedImage(imageUrl);
+    setSelectedImageName(imageName || "");
     setOpen(true);
   };
 
   const handleClose = () => {
     setOpen(false);
     setSelectedImage(null);
+    setSelectedImageName("");
     setImageDescription("");
   };
 
@@ -222,7 +225,25 @@ If the image contains hieroglyphs:
 - If cartouches are detected, read and translate the names inside them.
 - Explain what is written in the hieroglyphs to someone who wants to understand the text.
 - The word "nṯr" (netjer) in hieroglyphs represents a FORCE or power, NOT a god. Ancient Egyptians did not believe in gods as deities — they understood these figures as forces and archetypes within the human psyche.
-- Consider Thutmose III (تحتمس الثالث) to be the Prophet Solomon (سليمان) mentioned in the Quran. When relevant, explain the image from a Quranic perspective linking Thutmose III to Solomon.
+
+Use the following correspondences between ancient/historical figures and Quranic/religious figures when analyzing the image:
+- Imhotep (إمحوتب) = Prophet Joseph (يوسف)
+- Nut (نوت) the sky goddess = Noah (نوح)
+- Thutmose III (تحتمس الثالث) = Prophet Solomon (سليمان)
+- Thutmose II (تحتمس الثاني) = Prophet David (داود)
+- Moses (موسى) = Zarathustra/Zoroaster (زرادشت)
+- Abraham (إبراهيم) = Socrates (سقراط)
+- Plato (أفلاطون) = Ismail (إسماعيل)
+- Aristotle (أرسطو) = Isaac (إسحاق)
+- Jacob (يعقوب) is NOT Israel
+- Lot (لوط) = Buddha (بوذا)
+- Mohamed (محمد) = Mani (ماني)
+- Akhenaten/Ikhnaton (إخناتون) = Imran (عمران)
+- Tutankhamun (توت عنخ آمون) = Yahia/John (يحيى)
+- Meritaten (ميريت آتون) = Mother Mary (السيدة مريم)
+- Smenkhkare (سمنخ كع رع) = Zakaria (زكريا)
+
+When relevant, explain the image from a Quranic perspective using these correspondences.
 
 Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name for this image (less than 15 words). Finally, add a line of relevant hashtags in English.` },
                 {
@@ -292,19 +313,17 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
               minHeight: 300,
             }}
           >
-            {/* Image side with hover button */}
+            {/* Image side */}
             <Box
               sx={{
-                position: "relative",
                 flex: imageDescription ? "0 0 50%" : "1 1 auto",
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 background: "#0f0f23",
                 p: 2,
               }}
-              onMouseEnter={() => setImageHover(true)}
-              onMouseLeave={() => setImageHover(false)}
             >
               {selectedImage && (
                 <img
@@ -312,46 +331,62 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                   alt="Large Illustration"
                   style={{
                     maxWidth: "100%",
-                    maxHeight: "70vh",
+                    maxHeight: "65vh",
                     objectFit: "contain",
                     borderRadius: 8,
                   }}
                 />
               )}
-              {/* Hover overlay with button */}
+              {/* Image name and describe button */}
               <Box
                 sx={{
-                  position: "absolute",
-                  inset: 0,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  background: "rgba(0,0,0,0.45)",
-                  opacity: imageHover || describingImage ? 1 : 0,
-                  transition: "opacity 0.3s ease",
-                  pointerEvents: imageHover || describingImage ? "auto" : "none",
+                  justifyContent: "space-between",
+                  width: "100%",
+                  mt: 1.5,
+                  px: 1,
                 }}
               >
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "#aaa",
+                    fontFamily: "Roboto, sans-serif",
+                    fontSize: "0.85rem",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    flex: 1,
+                    mr: 2,
+                  }}
+                >
+                  {selectedImageName}
+                </Typography>
                 {describingImage ? (
-                  <CircularProgress sx={{ color: "#fff" }} />
+                  <CircularProgress size={28} sx={{ color: "#aaa" }} />
                 ) : (
                   <Button
                     onClick={handleDescribeImage}
-                    variant="contained"
+                    variant="outlined"
+                    size="small"
                     startIcon={<AutoAwesomeIcon />}
                     sx={{
-                      borderRadius: 8,
-                      px: 3,
-                      py: 1.2,
-                      fontSize: "1rem",
+                      borderRadius: 5,
+                      px: 2,
+                      py: 0.5,
+                      fontSize: "0.8rem",
                       textTransform: "none",
-                      backgroundColor: "#1B4D3E",
+                      fontFamily: "Roboto, sans-serif",
+                      color: "#aaa",
+                      borderColor: "#444",
                       "&:hover": {
-                        backgroundColor: "#153D31",
+                        borderColor: "#888",
+                        backgroundColor: "rgba(255,255,255,0.05)",
                       },
                     }}
                   >
-                    Describe Image
+                    Describe
                   </Button>
                 )}
               </Box>
@@ -385,8 +420,9 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                     sx={{
                       color: "#e0e0e0",
                       whiteSpace: "pre-wrap",
-                      lineHeight: 1.7,
-                      fontSize: "0.95rem",
+                      lineHeight: 1.8,
+                      fontSize: "1.05rem",
+                      fontFamily: "Roboto, sans-serif",
                     }}
                   >
                     {imageDescription}

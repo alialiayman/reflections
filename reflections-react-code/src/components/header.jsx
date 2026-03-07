@@ -230,7 +230,7 @@ const Header = ({
                       cursor: "pointer",
                       borderRadius: "5px",
                     }}
-                    onClick={() => handleClickOpen(image.url)}
+                    onClick={() => handleClickOpen(image.url, image.name)}
                   />
                 ))}
               </div>
