@@ -6,10 +6,14 @@ import {
   Container,
   Dialog,
   DialogContent,
+  IconButton,
+  InputAdornment,
   Snackbar,
+  TextField,
   Typography,
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import SendIcon from "@mui/icons-material/Send";
 import { useEffect, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
@@ -40,6 +44,10 @@ function App() {
   const [imageDescription, setImageDescription] = useState("");
   const [describingImage, setDescribingImage] = useState(false);
   const [borderColorIndex, setBorderColorIndex] = useState(0);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [userQuestion, setUserQuestion] = useState("");
+  const [askingQuestion, setAskingQuestion] = useState(false);
+  const [imageBase64Data, setImageBase64Data] = useState(null);
 
 
   const borderColors = [
@@ -190,6 +198,9 @@ function App() {
     setSelectedImage(null);
     setSelectedImageName("");
     setImageDescription("");
+    setChatMessages([]);
+    setUserQuestion("");
+    setImageBase64Data(null);
   };
 
   const handleDescribeImage = async () => {
@@ -206,6 +217,7 @@ function App() {
       });
 
       const mimeType = blob.type || "image/png";
+      setImageBase64Data({ base64, mimeType });
       const res = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -260,15 +272,68 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
       });
 
       const data = await res.json();
-      setImageDescription(
-        data.choices?.[0]?.message?.content || "No description returned."
-      );
+      const content = data.choices?.[0]?.message?.content || "No description returned.";
+      setImageDescription(content);
+      setChatMessages([
+        { role: "assistant", content },
+      ]);
       setBorderColorIndex((prev) => (prev + 1) % borderColors.length);
     } catch (err) {
       console.error("Failed to describe image:", err);
       setImageDescription("Error: could not describe image.");
     } finally {
       setDescribingImage(false);
+    }
+  };
+
+  const handleAskQuestion = async () => {
+    if (!userQuestion.trim() || !imageBase64Data) return;
+    const question = userQuestion.trim();
+    setUserQuestion("");
+    setAskingQuestion(true);
+
+    const newMessages = [...chatMessages, { role: "user", content: question }];
+    setChatMessages(newMessages);
+
+    try {
+      const apiMessages = [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "This is an image of an ancient Egyptian artifact. Answer all questions in Arabic." },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${imageBase64Data.mimeType};base64,${imageBase64Data.base64}`,
+              },
+            },
+          ],
+        },
+        ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+      ];
+
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getVisionKey()}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          messages: apiMessages,
+          max_tokens: 2000,
+        }),
+      });
+
+      const data = await res.json();
+      const reply = data.choices?.[0]?.message?.content || "No response.";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      setBorderColorIndex((prev) => (prev + 1) % borderColors.length);
+    } catch (err) {
+      console.error("Failed to ask question:", err);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "حدث خطأ أثناء الإجابة." }]);
+    } finally {
+      setAskingQuestion(false);
     }
   };
 
@@ -337,12 +402,9 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                   }}
                 />
               )}
-              {/* Image name and describe button */}
+              {/* Image name and action area */}
               <Box
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
                   width: "100%",
                   mt: 1.5,
                   px: 1,
@@ -357,43 +419,89 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
-                    flex: 1,
-                    mr: 2,
+                    mb: 1,
                   }}
                 >
                   {selectedImageName}
                 </Typography>
-                {describingImage ? (
-                  <CircularProgress size={28} sx={{ color: "#aaa" }} />
+                {!imageDescription ? (
+                  // Initial Describe button
+                  describingImage ? (
+                    <CircularProgress size={28} sx={{ color: "#aaa" }} />
+                  ) : (
+                    <Button
+                      onClick={handleDescribeImage}
+                      variant="outlined"
+                      size="small"
+                      startIcon={<AutoAwesomeIcon />}
+                      sx={{
+                        borderRadius: 5,
+                        px: 2,
+                        py: 0.5,
+                        fontSize: "0.8rem",
+                        textTransform: "none",
+                        fontFamily: "Roboto, sans-serif",
+                        color: "#aaa",
+                        borderColor: "#444",
+                        "&:hover": {
+                          borderColor: "#888",
+                          backgroundColor: "rgba(255,255,255,0.05)",
+                        },
+                      }}
+                    >
+                      Describe
+                    </Button>
+                  )
                 ) : (
-                  <Button
-                    onClick={handleDescribeImage}
+                  // Ask follow-up input
+                  <TextField
+                    value={userQuestion}
+                    onChange={(e) => setUserQuestion(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAskQuestion();
+                      }
+                    }}
+                    placeholder="اسأل عن الصورة..."
                     variant="outlined"
                     size="small"
-                    startIcon={<AutoAwesomeIcon />}
-                    sx={{
-                      borderRadius: 5,
-                      px: 2,
-                      py: 0.5,
-                      fontSize: "0.8rem",
-                      textTransform: "none",
-                      fontFamily: "Roboto, sans-serif",
-                      color: "#aaa",
-                      borderColor: "#444",
-                      "&:hover": {
-                        borderColor: "#888",
-                        backgroundColor: "rgba(255,255,255,0.05)",
+                    fullWidth
+                    disabled={askingQuestion}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          {askingQuestion ? (
+                            <CircularProgress size={22} sx={{ color: "#aaa" }} />
+                          ) : (
+                            <IconButton
+                              onClick={handleAskQuestion}
+                              disabled={!userQuestion.trim()}
+                              size="small"
+                              sx={{ color: "#aaa" }}
+                            >
+                              <SendIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </InputAdornment>
+                      ),
+                      sx: {
+                        fontFamily: "Roboto, sans-serif",
+                        fontSize: "0.9rem",
+                        color: "#e0e0e0",
+                        borderRadius: 3,
+                        "& fieldset": { borderColor: "#444" },
+                        "&:hover fieldset": { borderColor: "#888" },
+                        "&.Mui-focused fieldset": { borderColor: "#6C63FF" },
                       },
                     }}
-                  >
-                    Describe
-                  </Button>
+                  />
                 )}
               </Box>
             </Box>
 
-            {/* Description side */}
-            {imageDescription && (
+            {/* Conversation side */}
+            {chatMessages.length > 0 && (
               <Box
                 sx={{
                   flex: "1 1 50%",
@@ -403,31 +511,39 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                   justifyContent: "flex-start",
                   overflow: "auto",
                   maxHeight: "75vh",
+                  gap: 2,
                 }}
               >
-                <Box
-                  sx={{
-                    border: 2,
-                    borderColor: borderColors[borderColorIndex],
-                    borderRadius: 3,
-                    p: 2.5,
-                    transition: "border-color 0.5s ease",
-                    background: "rgba(255,255,255,0.04)",
-                  }}
-                >
-                  <Typography
-                    variant="body1"
+                {chatMessages.map((msg, idx) => (
+                  <Box
+                    key={idx}
                     sx={{
-                      color: "#e0e0e0",
-                      whiteSpace: "pre-wrap",
-                      lineHeight: 1.8,
-                      fontSize: "1.05rem",
-                      fontFamily: "Roboto, sans-serif",
+                      border: msg.role === "assistant" ? 2 : 1,
+                      borderColor: msg.role === "assistant"
+                        ? borderColors[(borderColorIndex + idx) % borderColors.length]
+                        : "#555",
+                      borderRadius: 3,
+                      p: 2,
+                      transition: "border-color 0.5s ease",
+                      background: msg.role === "assistant"
+                        ? "rgba(255,255,255,0.04)"
+                        : "rgba(108,99,255,0.08)",
                     }}
                   >
-                    {imageDescription}
-                  </Typography>
-                </Box>
+                    <Typography
+                      variant="body1"
+                      sx={{
+                        color: "#e0e0e0",
+                        whiteSpace: "pre-wrap",
+                        lineHeight: 1.8,
+                        fontSize: "1.05rem",
+                        fontFamily: "Roboto, sans-serif",
+                      }}
+                    >
+                      {msg.content}
+                    </Typography>
+                  </Box>
+                ))}
               </Box>
             )}
           </Box>
