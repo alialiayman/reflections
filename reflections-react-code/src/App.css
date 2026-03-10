@@ -19,6 +19,21 @@ img {
   float: left;
 }
 
+/* Images inside figures: no float so the caption sits below */
+figure {
+  display: block;
+  text-align: center;
+  clear: both;
+  margin: 1em auto;
+}
+
+figure img {
+  float: none;
+  display: block;
+  margin: 0 auto;
+  max-width: 50%;
+}
+
 /* Mobile styles */
 @media (max-width: 768px) {
   img {
