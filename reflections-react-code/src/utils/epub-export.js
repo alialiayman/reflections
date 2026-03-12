@@ -784,8 +784,7 @@ export const exportFolderToEpub = async ({
     : null;
 
   const spineDocs = [
-    ...(coverDoc ? [coverDoc] : []),
-    infoDoc,
+    ...(coverDoc ? [coverDoc] : [infoDoc]),
     ...chapterDocs,
     ...(backCoverDoc ? [backCoverDoc] : []),
   ];
