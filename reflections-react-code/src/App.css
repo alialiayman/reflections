@@ -15,8 +15,19 @@
 
 /* Default image layout for desktop (scoped to markdown content) */
 .markdown-content img {
-  max-width: 25%;
-  float: left;
+  max-width: 45%;
+  display: block;
+  margin: 1em auto;
+  border-radius: 12px;
+  border: 3px solid #00BFA6;
+  box-shadow: 0 4px 20px rgba(0, 191, 166, 0.35), 0 8px 30px rgba(0, 0, 0, 0.25);
+  transition: transform 0.4s ease, box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.markdown-content img:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 30px rgba(255, 179, 0, 0.45), 0 12px 40px rgba(0, 0, 0, 0.35);
+  border-color: #FFB300;
 }
 
 /* Images inside figures: no float so the caption sits below */
@@ -38,7 +49,7 @@ figure img {
 @media (max-width: 768px) {
   .markdown-content img {
     max-width: 90vw;
-    margin: 0 auto;
+    margin: 1em auto;
     float: none;
     display: block;
   }
