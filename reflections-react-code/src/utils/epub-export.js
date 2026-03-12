@@ -187,7 +187,7 @@ const mapImagesToSections = (images, sectionsCount) => {
 const buildSectionImageFigureHtml = (image) =>
   `<figure style="text-align:center;"><img src="../images/${image.fileName}" alt="${escapeXml(
     image.name
-  )}" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
+  )}" style="border-radius:12px;border:3px solid #00BFA6;box-shadow:0 4px 20px rgba(0,191,166,0.35),0 8px 30px rgba(0,0,0,0.25);" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
     stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
       fileNameWithoutExtension(image.name)
   )}</figcaption></figure>`;
@@ -466,7 +466,7 @@ const resolveDefaultTitleFromPath = (path = "") =>
 const buildSectionPreviewFigureHtml = (image) =>
   `<figure style="text-align:center;"><img src="${escapeXml(
     image.url
-  )}" alt="${escapeXml(image.name)}" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
+  )}" alt="${escapeXml(image.name)}" style="border-radius:12px;border:3px solid #00BFA6;box-shadow:0 4px 20px rgba(0,191,166,0.35),0 8px 30px rgba(0,0,0,0.25);" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
     stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
       fileNameWithoutExtension(image.name)
   )}</figcaption></figure>`;
