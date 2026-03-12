@@ -706,36 +706,28 @@ export const exportFolderToEpub = async ({
         heading: "الغلاف",
         xhtml: buildXhtml(
           "الغلاف",
-          `    <section id="cover" style="text-align:center;max-width:780px;margin:0 auto;padding:1rem 0.2rem;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;">${coverTopSvg}<h1 style="margin:0 0 0.5rem 0;font-size:1.25em;line-height:1.35;">${escapeXml(
+          `    <section id="cover" style="text-align:center;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:1rem;"><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
             title
-          )}</h1><p style="margin:0 0 0.85rem 0;font-size:0.72em;opacity:0.78;">رقم الكتاب: ${escapeXml(
-            identifier
-          )}</p><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
-            title
-          )}" style="max-width:100%;height:auto;border-radius:10px;" /><div style="text-align:center;margin-top:1rem;line-height:1.6;font-size:0.72em;max-width:640px;"><p><strong>المؤلف:</strong> ${escapeXml(
-            epubMetadata.creator
-          )}</p><p><strong>الناشر:</strong> ${escapeXml(
-            epubMetadata.publisher
-          )}</p><p><strong>العنوان الكامل:</strong> ${escapeXml(
-            title
-          )}</p><p><strong>الموقع:</strong> ${escapeXml(
-            epubMetadata.location
-          )}</p><p><strong>وسيلة التواصل (واتساب):</strong> ${escapeXml(
-            epubMetadata.contactWhatsApp
-          )}</p><p><strong>رابط التواصل:</strong> <a href="${escapeXml(
-            epubMetadata.contactUrl
-          )}">${escapeXml(epubMetadata.contactUrl)}</a></p><p><strong>الموقع الإلكتروني:</strong> ${escapeXml(
-            epubMetadata.website
-          )}</p><p><strong>حقوق النشر:</strong> ${escapeXml(
-            epubMetadata.rights
-          )}</p><p><strong>تنويه الذكاء الاصطناعي:</strong> ${escapeXml(
-            epubMetadata.aiDisclosure
-          )}</p><p><strong>إخلاء المسؤولية:</strong> ${escapeXml(
-            epubMetadata.disclaimer
-          )}</p></div></section>`
+          )}" style="max-width:100%;height:auto;border-radius:12px;border:3px solid #00BFA6;box-shadow:0 4px 20px rgba(0,191,166,0.35),0 8px 30px rgba(0,0,0,0.25);" /></section>`
         ),
       }
     : null;
+
+  const titlePageDoc = {
+    id: "title-page",
+    href: "text/title-page.xhtml",
+    heading: title,
+    xhtml: buildXhtml(
+      title,
+      `    <section id="title-page" style="text-align:center;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:2rem 1rem;">${coverTopSvg}<h1 style="margin:1.5rem 0 0.75rem 0;font-size:1.6em;line-height:1.4;">${escapeXml(
+        title
+      )}</h1><p style="margin:0.5rem 0;font-size:1.1em;opacity:0.85;">${escapeXml(
+        epubMetadata.creator
+      )}</p><p style="margin:0.5rem 0;font-size:0.8em;opacity:0.6;">${escapeXml(
+        epubMetadata.publisher
+      )}</p></section>`
+    ),
+  };
 
   const infoDoc = {
     id: "book-info-page",
@@ -743,16 +735,14 @@ export const exportFolderToEpub = async ({
     heading: "معلومات الكتاب",
     xhtml: buildXhtml(
       "معلومات الكتاب",
-      `    <section id="book-info"><h1>${escapeXml(
+      `    <section id="book-info" style="max-width:640px;margin:0 auto;padding:2rem 1rem;line-height:1.8;font-size:0.85em;"><p><strong>العنوان الكامل:</strong> ${escapeXml(
         title
-      )}</h1><p><strong>رقم الكتاب:</strong> ${escapeXml(
-        identifier
       )}</p><p><strong>المؤلف:</strong> ${escapeXml(
         epubMetadata.creator
       )}</p><p><strong>الناشر:</strong> ${escapeXml(
         epubMetadata.publisher
-      )}</p><p><strong>العنوان الكامل:</strong> ${escapeXml(
-        title
+      )}</p><p><strong>رقم الكتاب:</strong> ${escapeXml(
+        identifier
       )}</p><p><strong>الموقع:</strong> ${escapeXml(
         epubMetadata.location
       )}</p><p><strong>وسيلة التواصل (واتساب):</strong> ${escapeXml(
@@ -784,7 +774,9 @@ export const exportFolderToEpub = async ({
     : null;
 
   const spineDocs = [
-    ...(coverDoc ? [coverDoc] : [infoDoc]),
+    ...(coverDoc ? [coverDoc] : []),
+    titlePageDoc,
+    infoDoc,
     ...chapterDocs,
     ...(backCoverDoc ? [backCoverDoc] : []),
   ];
