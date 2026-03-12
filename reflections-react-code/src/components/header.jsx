@@ -224,11 +224,15 @@ const Header = ({
                     key={index}
                     src={image.url}
                     alt={`illustration ${index}`}
+                    className="header-thumbnail"
                     style={{
                       width: "40px",
                       height: "40px",
                       cursor: "pointer",
-                      borderRadius: "5px",
+                      borderRadius: "8px",
+                      border: "1.5px solid rgba(164, 180, 148, 0.4)",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+                      transition: "all 0.3s ease",
                     }}
                     onClick={() => handleClickOpen(image.url, image.name)}
                   />

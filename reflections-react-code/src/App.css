@@ -125,3 +125,38 @@ figure img {
     transform: rotate(360deg);
   }
 }
+
+/* Image reveal animation for modal */
+@keyframes imageReveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+    box-shadow: 0 0 0 rgba(108, 99, 255, 0), 0 0 0 rgba(108, 99, 255, 0), 0 0 0 rgba(0, 0, 0, 0);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 20px rgba(108, 99, 255, 0.3), 0 0 60px rgba(108, 99, 255, 0.1), 0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* Modal image glow effect */
+.modal-image-glow {
+  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+.modal-image-glow:hover {
+  box-shadow: 0 0 25px rgba(108, 99, 255, 0.45), 0 0 70px rgba(108, 99, 255, 0.15), 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  border-color: rgba(108, 99, 255, 0.6) !important;
+}
+
+/* Header thumbnail hover effects */
+.header-thumbnail:hover {
+  box-shadow: 0 0 12px rgba(164, 180, 148, 0.5), 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+  border-color: rgba(164, 180, 148, 0.8) !important;
+  transform: scale(1.1);
+}
