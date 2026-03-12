@@ -399,9 +399,9 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                     maxWidth: "100%",
                     maxHeight: "65vh",
                     objectFit: "contain",
-                    borderRadius: 12,
-                    border: "2px solid rgba(108, 99, 255, 0.4)",
-                    boxShadow: "0 0 20px rgba(108, 99, 255, 0.3), 0 0 60px rgba(108, 99, 255, 0.1), 0 8px 32px rgba(0, 0, 0, 0.5)",
+                    borderRadius: 14,
+                    border: "3px solid #00BFA6",
+                    boxShadow: "0 0 25px rgba(0, 191, 166, 0.5), 0 0 60px rgba(0, 191, 166, 0.15), 0 10px 40px rgba(0, 0, 0, 0.6)",
                     animation: "imageReveal 0.6s ease-out",
                   }}
                 />
