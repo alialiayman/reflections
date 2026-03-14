@@ -12,7 +12,7 @@ const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 </container>`;
 
 const DEFAULT_EPUB_METADATA = {
-  creator: "أيمن الراصد",
+  creator: "ايمن علي محمد",
   publisher: "نشر مستقل عبر الإنترنت",
   subject: "تأملات روحية",
   rights: "© جميع الحقوق محفوظة",
@@ -735,22 +735,29 @@ export const exportFolderToEpub = async ({
     heading: "معلومات الكتاب",
     xhtml: buildXhtml(
       "معلومات الكتاب",
-      `    <section id="book-info" style="max-width:640px;margin:0 auto;padding:2rem 1rem;line-height:1.8;font-size:0.95em;">
-        <p><strong>العنوان الكامل:</strong> ${escapeXml(title)}</p>
-        <p><strong>المؤلف:</strong> ${escapeXml(epubMetadata.creator)}</p>
-        <p><strong>الناشر:</strong> ${escapeXml(epubMetadata.publisher)}</p>
-        <p><strong>رقم الكتاب:</strong> ${escapeXml(identifier)}</p>
-        <p><strong>الموقع:</strong> ${escapeXml(epubMetadata.location)}</p>
-        <p><strong>وسيلة التواصل (واتساب):</strong> ${escapeXml(epubMetadata.contactWhatsApp)}</p>
-        <p><strong>رابط التواصل:</strong> <a href="${escapeXml(epubMetadata.contactUrl)}">${escapeXml(epubMetadata.contactUrl)}</a></p>
-        <p><strong>الموقع الإلكتروني:</strong> ${escapeXml(epubMetadata.website)}</p>
-        <p><strong>قناة يوتيوب:</strong> <a href="https://www.youtube.com/@quran.spirituality.reflections" target="_blank" rel="noopener">https://www.youtube.com/@quran.spirituality.reflections</a><br/><span style="color:#1b4d3e;font-size:0.93em;">للمزيد من المعلومات والتواصل، يرجى زيارة القناة.</span></p>
-        <p><strong>مستودع جت هب:</strong> <a href="https://github.com/alialiayman/reflections" target="_blank" rel="noopener">https://github.com/alialiayman/reflections</a><br/><span style="color:#1b4d3e;font-size:0.93em;">للاطلاع على جميع المقالات والمصادر البرمجية.</span></p>
-        <p><strong>حقوق النشر:</strong> ${escapeXml(epubMetadata.rights)}</p>
-        <p><strong>تنويه الذكاء الاصطناعي:</strong> ${escapeXml(epubMetadata.aiDisclosure)}</p>
-        <p><strong>إخلاء المسؤولية:</strong> ${escapeXml(epubMetadata.disclaimer)}</p>
-        <p><strong>تاريخ الإنشاء:</strong> ${escapeXml(createdDate)}</p>
-      </section>`
+      `    <section id="book-info" style="max-width:640px;margin:0 auto;padding:2rem 1rem;line-height:1.8;font-size:0.85em;"><p><strong>العنوان الكامل:</strong> ${escapeXml(
+        title
+      )}</p><p><strong>المؤلف:</strong> ${escapeXml(
+        epubMetadata.creator
+      )}</p><p><strong>الناشر:</strong> ${escapeXml(
+        epubMetadata.publisher
+      )}</p><p><strong>رقم الكتاب:</strong> ${escapeXml(
+        identifier
+      )}</p><p><strong>الموقع:</strong> ${escapeXml(
+        epubMetadata.location
+      )}</p><p><strong>وسيلة التواصل (واتساب):</strong> ${escapeXml(
+        epubMetadata.contactWhatsApp
+      )}</p><p><strong>رابط التواصل:</strong> <a href="${escapeXml(
+        epubMetadata.contactUrl
+      )}">${escapeXml(epubMetadata.contactUrl)}</a></p><p><strong>الموقع الإلكتروني:</strong> ${escapeXml(
+        epubMetadata.website
+      )}</p><p><strong>حقوق النشر:</strong> ${escapeXml(
+        epubMetadata.rights
+      )}</p><p><strong>تنويه الذكاء الاصطناعي:</strong> ${escapeXml(
+        epubMetadata.aiDisclosure
+      )}</p><p><strong>إخلاء المسؤولية:</strong> ${escapeXml(
+        epubMetadata.disclaimer
+      )}</p><p><strong>تاريخ الإنشاء:</strong> ${escapeXml(createdDate)}</p></section>`
     ),
   };
 
