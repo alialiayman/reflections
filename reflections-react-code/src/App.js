@@ -83,7 +83,8 @@ function App() {
               return (
                 lowerName.endsWith(".jpg") ||
                 lowerName.endsWith(".jpeg") ||
-                lowerName.endsWith(".png")
+                lowerName.endsWith(".png") ||
+                lowerName.endsWith(".svg")
               );
             })
             .map((file) => ({
