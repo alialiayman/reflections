@@ -2,11 +2,33 @@ import { Typography } from "@mui/material";
 import DisplayReadme from "./display-readme";
 import EpubPreview from "./epub-preview";
 
+const safelyDecodeURIComponent = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const getNormalizedPathSegments = (pathname) =>
+  pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => safelyDecodeURIComponent(segment).trim())
+    .filter(Boolean);
+
 export default function Main({ previewMode, images }) {
   const path = window.location.pathname;
+  const pathSegments = getNormalizedPathSegments(path);
+  const encodedPath = pathSegments.map((segment) => encodeURIComponent(segment)).join("/");
+  const canonicalPath = encodedPath ? `/${encodedPath}` : "/";
+  const displayPath = pathSegments.join("/");
+  const footerHref = `https://a-reflections.web.app${canonicalPath === "/" ? "" : canonicalPath}`;
+  const footerLabel = `https://a-reflections.web.app${displayPath ? `/${displayPath}` : ""}`;
+
   return (
     <div id="readme">
-      {previewMode ? <EpubPreview path={path} images={images} /> : <DisplayReadme path={path} />}
+      {previewMode ? <EpubPreview path={canonicalPath} images={images} /> : <DisplayReadme path={canonicalPath} />}
       <Typography
         variant="caption"
         color="textSecondary"
@@ -16,9 +38,7 @@ export default function Main({ previewMode, images }) {
           display: "block",
         }}
       >
-        {`https://a-reflections.web.app${
-          path === "/" ? "" : path
-        }`}
+        <a href={footerHref}>{footerLabel}</a>
       </Typography>
     </div>
   );

@@ -1,6 +1,12 @@
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import EditIcon from '@mui/icons-material/Edit';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import LogoutIcon from '@mui/icons-material/Logout';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
+import Button from '@mui/material/Button';
 import Snackbar from '@mui/material/Snackbar';
+import TextField from '@mui/material/TextField';
 import { Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import axios from 'axios';
@@ -8,6 +14,12 @@ import React, { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GITHUB } from '../constants';
+import {
+    isGithubAuthConfigured,
+    onGithubAuthChanged,
+    signInWithGithub,
+    signOutGithub
+} from '../utils/github-auth';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -18,6 +30,12 @@ const FOLDER_LIST_FALLBACK = '⚠️ تعذر تحميل قائمة المجلد
 const FOLDER_SUBTITLE_TOKEN = '[[FOLDER_SUBTITLE]]';
 const FOLDER_SUBTITLE_TOKEN_REGEX = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/i;
 const FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/gi;
+const GITHUB_API_BASE = 'https://api.github.com';
+const GITHUB_REPO_OWNER = 'alialiayman';
+const GITHUB_REPO_NAME = 'reflections';
+const GITHUB_DEFAULT_BRANCH = 'main';
+const GITHUB_ACCESS_TOKEN_STORAGE_KEY = 'reflections_github_access_token';
+const GITHUB_LOGIN_STORAGE_KEY = 'reflections_github_login';
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -53,6 +71,34 @@ const toEncodedRepoPath = (path) => {
     return segments
         .map((segment) => encodeURIComponent(segment))
         .join('/');
+};
+
+const toGitHubContentsPath = (path, filename) => {
+    const segments = getNormalizedPathSegments(path);
+    const cleanFilename = safelyDecodeURIComponent(filename || 'README.md').trim() || 'README.md';
+    return [...segments, cleanFilename].join('/');
+};
+
+const toEncodedGitHubContentsPath = (path) => {
+    if (!path) {
+        return '';
+    }
+
+    return path
+        .split('/')
+        .filter(Boolean)
+        .map((segment) => encodeURIComponent(segment))
+        .join('/');
+};
+
+const toBase64Utf8 = (value) => {
+    const bytes = new TextEncoder().encode(value);
+    let binary = '';
+    bytes.forEach((byte) => {
+        binary += String.fromCharCode(byte);
+    });
+
+    return window.btoa(binary);
 };
 
 const buildFolderUrl = (currentPath, folderName) => {
@@ -284,6 +330,15 @@ const FolderListTableCell = ({ children, ...props }) => {
 const DisplayReadme = ({ path, filename = 'README.md' }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
+    const [githubToken, setGithubToken] = useState(() => localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY) || '');
+    const [githubLogin, setGithubLogin] = useState(() => localStorage.getItem(GITHUB_LOGIN_STORAGE_KEY) || '');
+    const [oauthConfigured] = useState(() => isGithubAuthConfigured());
+    const [hasRepoWriteAccess, setHasRepoWriteAccess] = useState(false);
+    const [authLoading, setAuthLoading] = useState(false);
+    const [authChecking, setAuthChecking] = useState(false);
+    const [editingSectionIndex, setEditingSectionIndex] = useState(null);
+    const [editingMarkdown, setEditingMarkdown] = useState('');
+    const [savingEdit, setSavingEdit] = useState(false);
     const [snackbarState, setSnackbarState] = useState({
         open: false,
         message: '',
@@ -291,8 +346,89 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
     });
 
     useEffect(() => {
+        if (!oauthConfigured) {
+            return () => {};
+        }
+
+        return onGithubAuthChanged((user) => {
+            if (!user) {
+                return;
+            }
+
+            if (user?.reloadUserInfo?.screenName) {
+                const login = user.reloadUserInfo.screenName;
+                setGithubLogin(login);
+                localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
+            } else if (user?.providerData?.[0]?.uid) {
+                const login = user.providerData[0].uid;
+                setGithubLogin(login);
+                localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
+            }
+        });
+    }, [oauthConfigured]);
+
+    useEffect(() => {
+        if (!githubToken) {
+            setHasRepoWriteAccess(false);
+            setAuthChecking(false);
+            return;
+        }
+
+        let cancelled = false;
+        const verifyRepoAccess = async () => {
+            setAuthChecking(true);
+
+            try {
+                const response = await axios.get(
+                    `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${githubToken}`,
+                            Accept: 'application/vnd.github+json'
+                        }
+                    }
+                );
+
+                const canPush = Boolean(response.data?.permissions?.push);
+                if (!cancelled) {
+                    setHasRepoWriteAccess(canPush);
+                }
+
+                if (!canPush && !cancelled) {
+                    setSnackbarState({
+                        open: true,
+                        message: 'GitHub token is valid but does not have write access to this repository.',
+                        severity: 'warning'
+                    });
+                }
+            } catch {
+                if (!cancelled) {
+                    setHasRepoWriteAccess(false);
+                    localStorage.removeItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
+                    setGithubToken('');
+                    setSnackbarState({
+                        open: true,
+                        message: 'GitHub authentication failed. Please sign in again.',
+                        severity: 'error'
+                    });
+                }
+            } finally {
+                if (!cancelled) {
+                    setAuthChecking(false);
+                }
+            }
+        };
+
+        verifyRepoAccess();
+        return () => {
+            cancelled = true;
+        };
+    }, [githubToken]);
+
+    useEffect(() => {
         if (path && filename) {
             const url = `${GITHUB}${path.endsWith('/') ? path : path + '/'}${filename}`;
+            setError(null);
             axios.get(url, { responseType: 'text' })
                 .then(async (readmeResponse) => {
                     let markdownText = readmeResponse.data;
@@ -387,12 +523,201 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
             });
         }
     };
+
+    const handleSignInGithub = async () => {
+        if (!oauthConfigured) {
+            setSnackbarState({
+                open: true,
+                message: 'GitHub OAuth is not configured yet. Add Firebase env vars to enable sign-in.',
+                severity: 'warning'
+            });
+            return;
+        }
+
+        try {
+            setAuthLoading(true);
+            const { user, accessToken } = await signInWithGithub();
+
+            if (!accessToken) {
+                throw new Error('Missing GitHub access token.');
+            }
+
+            const login = user?.reloadUserInfo?.screenName || user?.providerData?.[0]?.uid || '';
+            if (login) {
+                setGithubLogin(login);
+                localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
+            }
+
+            localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, accessToken);
+            setGithubToken(accessToken);
+            setSnackbarState({
+                open: true,
+                message: 'Signed in with GitHub.',
+                severity: 'success'
+            });
+        } catch {
+            setSnackbarState({
+                open: true,
+                message: 'GitHub sign-in failed. Please try again.',
+                severity: 'error'
+            });
+        } finally {
+            setAuthLoading(false);
+        }
+    };
+
+    const handleSignOutGithub = async () => {
+        await signOutGithub();
+        localStorage.removeItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
+        localStorage.removeItem(GITHUB_LOGIN_STORAGE_KEY);
+        setGithubToken('');
+        setGithubLogin('');
+        setHasRepoWriteAccess(false);
+        setEditingSectionIndex(null);
+        setEditingMarkdown('');
+        setSnackbarState({
+            open: true,
+            message: 'Signed out from GitHub editor mode.',
+            severity: 'info'
+        });
+    };
+
+    const handleStartEdit = (idx) => {
+        setEditingSectionIndex(idx);
+        setEditingMarkdown(sections[idx]?.markdown || '');
+    };
+
+    const handleCancelEdit = () => {
+        setEditingSectionIndex(null);
+        setEditingMarkdown('');
+    };
+
+    const handleSaveEdit = async (idx) => {
+        if (!hasRepoWriteAccess || !githubToken) {
+            setSnackbarState({
+                open: true,
+                message: 'GitHub write access is required to save edits.',
+                severity: 'warning'
+            });
+            return;
+        }
+
+        const updatedSections = sections.map((section, sectionIndex) =>
+            sectionIndex === idx
+                ? { ...section, markdown: editingMarkdown }
+                : section
+        );
+
+        const updatedMarkdown = updatedSections
+            .map((section) => section.markdown)
+            .join('\n\n');
+        const githubContentsPath = toGitHubContentsPath(path, filename);
+        const encodedContentsPath = toEncodedGitHubContentsPath(githubContentsPath);
+        const contentsUrl = `${REPO_CONTENTS_API_BASE}/${encodedContentsPath}`;
+
+        setSavingEdit(true);
+
+        try {
+            const fileResponse = await axios.get(`${contentsUrl}?ref=${GITHUB_DEFAULT_BRANCH}`, {
+                headers: {
+                    Authorization: `Bearer ${githubToken}`,
+                    Accept: 'application/vnd.github+json'
+                }
+            });
+
+            const fileSha = fileResponse.data?.sha;
+            if (!fileSha) {
+                throw new Error('Missing file SHA');
+            }
+
+            const commitMessage = `Edit ${githubContentsPath} section ${idx + 1}`;
+            await axios.put(
+                contentsUrl,
+                {
+                    message: commitMessage,
+                    content: toBase64Utf8(updatedMarkdown),
+                    sha: fileSha,
+                    branch: GITHUB_DEFAULT_BRANCH
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${githubToken}`,
+                        Accept: 'application/vnd.github+json'
+                    }
+                }
+            );
+
+            setSections(updatedSections);
+            setEditingSectionIndex(null);
+            setEditingMarkdown('');
+            setSnackbarState({
+                open: true,
+                message: 'Section updated and saved to GitHub.',
+                severity: 'success'
+            });
+        } catch {
+            setSnackbarState({
+                open: true,
+                message: 'Failed to save to GitHub. Check token permissions and try again.',
+                severity: 'error'
+            });
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
+    const canEditSections = hasRepoWriteAccess && Boolean(githubToken);
+
     return (
         <div>
             {error ? (
                 <Typography color="error">{error}</Typography>
             ) : (
                 <div>
+                    <Box
+                        sx={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: 1,
+                            mb: 2
+                        }}
+                    >
+                        <Typography variant="caption" color="text.secondary">
+                            {canEditSections
+                                ? 'GitHub editor mode is enabled for this repository.'
+                                : oauthConfigured
+                                    ? 'Sign in with GitHub to enable editing for this repository.'
+                                    : 'GitHub OAuth is not configured. Set Firebase env vars to enable sign in.'}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {githubLogin && <Typography variant="caption">@{githubLogin}</Typography>}
+                            {authChecking && <Typography variant="caption">Checking access...</Typography>}
+                            {!canEditSections ? (
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    startIcon={<GitHubIcon />}
+                                    onClick={handleSignInGithub}
+                                    disabled={authLoading || authChecking || !oauthConfigured}
+                                >
+                                    {authLoading ? 'Signing In...' : 'GitHub Sign In'}
+                                </Button>
+                            ) : (
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="inherit"
+                                    startIcon={<LogoutIcon />}
+                                    onClick={handleSignOutGithub}
+                                    disabled={authLoading || authChecking}
+                                >
+                                    Sign Out
+                                </Button>
+                            )}
+                        </Box>
+                    </Box>
                     <div>
                         {sections.map((section, idx) => (
                             <div
@@ -404,8 +729,7 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                                     position: 'relative'
                                 }}
                             >
-                                {/* The copy button positioned top-left */}
-                                <div style={{ position: 'absolute', top: 0, left: 0 }}>
+                                <div style={{ position: 'absolute', top: 0, left: 0, display: 'flex', gap: '0.25rem' }}>
                                     <IconButton
                                         size="small"
                                         onClick={() => handleCopy(section.markdown)}
@@ -413,21 +737,59 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                                     >
                                         <ContentCopyIcon fontSize="small" />
                                     </IconButton>
+                                    {canEditSections && (
+                                        <IconButton
+                                            size="small"
+                                            onClick={() => handleStartEdit(idx)}
+                                            title="Edit section"
+                                            disabled={savingEdit}
+                                        >
+                                            <EditIcon fontSize="small" />
+                                        </IconButton>
+                                    )}
                                 </div>
 
-                                {/* Add some left padding to make room for the button */}
-                                <div className="markdown-content" style={{ paddingLeft: '2rem' }}>
-                                    <Markdown
-                                        remarkPlugins={[remarkGfm]}
-                                        components={{
-                                            table: ({ ...props }) => <table className="readme-folder-table" {...props} />,
-                                            th: ({ ...props }) => <th className="readme-folder-table-th" {...props} />,
-                                            td: ({ children, ...props }) => <FolderListTableCell {...props}>{children}</FolderListTableCell>
-                                        }}
-                                    >
-                                        {section.markdown}
-                                    </Markdown>
-                                </div>
+                                {editingSectionIndex === idx ? (
+                                    <div className="markdown-content" style={{ paddingLeft: '4.25rem' }}>
+                                        <TextField
+                                            fullWidth
+                                            multiline
+                                            minRows={8}
+                                            value={editingMarkdown}
+                                            onChange={(event) => setEditingMarkdown(event.target.value)}
+                                            disabled={savingEdit}
+                                        />
+                                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                                            <Button
+                                                variant="contained"
+                                                onClick={() => handleSaveEdit(idx)}
+                                                disabled={savingEdit}
+                                            >
+                                                {savingEdit ? 'Saving...' : 'Save to GitHub'}
+                                            </Button>
+                                            <Button
+                                                variant="outlined"
+                                                onClick={handleCancelEdit}
+                                                disabled={savingEdit}
+                                            >
+                                                Cancel
+                                            </Button>
+                                        </Box>
+                                    </div>
+                                ) : (
+                                    <div className="markdown-content" style={{ paddingLeft: '4.25rem' }}>
+                                        <Markdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                table: ({ ...props }) => <table className="readme-folder-table" {...props} />,
+                                                th: ({ ...props }) => <th className="readme-folder-table-th" {...props} />,
+                                                td: ({ children, ...props }) => <FolderListTableCell {...props}>{children}</FolderListTableCell>
+                                            }}
+                                        >
+                                            {section.markdown}
+                                        </Markdown>
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

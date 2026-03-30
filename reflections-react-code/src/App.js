@@ -22,6 +22,21 @@ import { getVisionKey } from "./constants";
 
 const DEFAULT_COPY_LIMIT = 3500;
 
+const safelyDecodeURIComponent = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const getNormalizedPathSegments = (pathname) =>
+  pathname
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => safelyDecodeURIComponent(segment).trim())
+    .filter(Boolean);
+
 function getCopyLimitFromQuery() {
   const query = window.location.search;
   const match = query.match(/\d+/); // Find the first number in the query string
@@ -65,13 +80,17 @@ function App() {
     severity: "info",
   });
   const path = window.location.pathname;
+  const normalizedPathSegments = getNormalizedPathSegments(path);
+  const apiPath = normalizedPathSegments
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 
   useEffect(() => {
     const fetchImages = async () => {
       try {
         const response = await fetch(
           `https://api.github.com/repos/alialiayman/reflections/contents/${
-            path === "/" ? "" : path
+            apiPath
           }?ref=main`
         );
         const data = await response.json();
@@ -99,7 +118,7 @@ function App() {
     };
 
     fetchImages();
-  }, [path]);
+  }, [apiPath]);
 
   useEffect(() => {
     const readmeDiv = document.getElementById("readme");

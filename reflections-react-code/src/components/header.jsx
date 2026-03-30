@@ -7,6 +7,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
   Alert,
   AppBar,
+  Box,
   CircularProgress,
   IconButton,
   Snackbar,
@@ -81,29 +82,58 @@ const Header = ({
     <>
       <AppBar
         position="sticky"
-        sx={{ backgroundColor: "#1B4D3E", color: "#A4B494" }}
+        sx={{
+          backgroundColor: "#1B4D3E",
+          color: "#A4B494",
+          top: 0,
+          zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
+          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.35)",
+        }}
         {...props}
       >
-        <Toolbar sx={{ justifyContent: isMobile ? "center" : "space-between" }}>
-          <IconButton color="inherit" href="/" aria-label="home">
-            <Tooltip title="Home">
-              <HomeIcon />
-            </Tooltip>
-          </IconButton>
-          {isMobile ? (
-            <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
-              <IconButton
-                color="inherit"
-                href={`https://github.com/alialiayman/reflections${
-                  path === "/" ? "" : "/tree/main" + path
-                }`}
-                target="_blank"
-                aria-label="GitHub"
-              >
-                <Tooltip title="GitHub">
-                  <GitHubIcon />
-                </Tooltip>
-              </IconButton>
+        <Toolbar
+          sx={{
+            minHeight: { xs: 56, sm: 64 },
+            px: { xs: 1, sm: 2 },
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 1,
+            pt: "max(env(safe-area-inset-top), 0px)",
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+            <IconButton color="inherit" href="/" aria-label="home">
+              <Tooltip title="Home">
+                <HomeIcon />
+              </Tooltip>
+            </IconButton>
+          </Box>
+
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: { xs: 0.5, sm: 1 },
+              overflowX: "auto",
+              maxWidth: { xs: "78vw", sm: "none" },
+              "&::-webkit-scrollbar": { display: "none" },
+              scrollbarWidth: "none",
+            }}
+          >
+            <IconButton
+              color="inherit"
+              href={`https://github.com/alialiayman/reflections${
+                path === "/" ? "" : "/tree/main" + path
+              }`}
+              target="_blank"
+              aria-label="GitHub"
+            >
+              <Tooltip title="GitHub">
+                <GitHubIcon />
+              </Tooltip>
+            </IconButton>
+
+            {!loading && (
               <IconButton
                 color="inherit"
                 onClick={handleCopy}
@@ -117,130 +147,76 @@ const Header = ({
                   )}
                 </Tooltip>
               </IconButton>
+            )}
 
-              <IconButton
-                color="inherit"
-                aria-label="Translate"
-                onClick={handleTranslate}
-              >
-                <Tooltip title="Translate to English">
-                  <TranslateIcon />
-                </Tooltip>
-              </IconButton>
-              <IconButton
-                color="inherit"
-                aria-label="Toggle Preview"
-                onClick={onTogglePreview}
-              >
-                <Tooltip title={previewMode ? "Show README" : "EPUB-like Preview"}>
-                  <VisibilityIcon />
-                </Tooltip>
-              </IconButton>
-            </div>
-          ) : (
-            <>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "8px",
-                  alignItems: "center",
-                  maxWidth: "20vw",
-                }}
-              >
-                <IconButton
-                  color="inherit"
-                  href={`https://github.com/alialiayman/reflections${
-                    path === "/" ? "" : "/tree/main" + path
-                  }`}
-                  target="_blank"
-                  aria-label="GitHub"
-                >
-                  <Tooltip title="GitHub">
-                    <GitHubIcon />
-                  </Tooltip>
-                </IconButton>
-                {!loading && (
-                  <IconButton
-                    color="inherit"
-                    onClick={handleCopy}
-                    aria-label="Copy to Clipboard"
-                  >
-                    <Tooltip title="Copy All">
-                      {!copied ? (
-                        <ContentCopyIcon />
-                      ) : (
-                        <Typography variant="body">{`Copied ${copyIndex}/${textChunks.length}`}</Typography>
-                      )}
-                    </Tooltip>
-                  </IconButton>
+            <IconButton
+              color="inherit"
+              aria-label="Translate"
+              onClick={handleTranslate}
+            >
+              <Tooltip title="Translate to English">
+                <TranslateIcon />
+              </Tooltip>
+            </IconButton>
+
+            <IconButton
+              color="inherit"
+              aria-label="Toggle Preview"
+              onClick={onTogglePreview}
+            >
+              <Tooltip title={previewMode ? "Show README" : "EPUB-like Preview"}>
+                <VisibilityIcon />
+              </Tooltip>
+            </IconButton>
+
+            <IconButton
+              color="inherit"
+              aria-label="Export EPUB"
+              onClick={handleExportEpub}
+              disabled={exportingEpub || loading || !images.length}
+            >
+              <Tooltip title="Export EPUB">
+                {exportingEpub ? (
+                  <CircularProgress size={20} color="inherit" />
+                ) : (
+                  <MenuBookIcon />
                 )}
-                <IconButton
-                  color="inherit"
-                  aria-label="Translate"
-                  onClick={handleTranslate}
-                >
-                  <Tooltip title="Translate to English">
-                    <TranslateIcon />
-                  </Tooltip>
-                </IconButton>
-                <IconButton
-                  color="inherit"
-                  aria-label="Toggle Preview"
-                  onClick={onTogglePreview}
-                >
-                  <Tooltip title={previewMode ? "Show README" : "EPUB-like Preview"}>
-                    <VisibilityIcon />
-                  </Tooltip>
-                </IconButton>
-                <IconButton
-                  color="inherit"
-                  aria-label="Export EPUB"
-                  onClick={handleExportEpub}
-                  disabled={exportingEpub || loading || !images.length}
-                >
-                  <Tooltip title="Export EPUB">
-                    {exportingEpub ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : (
-                      <MenuBookIcon />
-                    )}
-                  </Tooltip>
-                </IconButton>
-              </div>
-
-              <div
-                style={{
-                  maxWidth: "75vw",
-                  padding: "0 16px",
-                  marginRight: "4rem",
-                  display: "flex",
-                  gap: "8px",
-                  justifyContent: "flex-start",
-                  overflowX: "scroll",
-                }}
-              >
-                {images.map((image, index) => (
-                  <img
-                    key={index}
-                    src={image.url}
-                    alt={`illustration ${index}`}
-                    className="header-thumbnail"
-                    style={{
-                      width: "40px",
-                      height: "40px",
-                      cursor: "pointer",
-                      borderRadius: "8px",
-                      border: "1.5px solid rgba(164, 180, 148, 0.4)",
-                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
-                      transition: "all 0.3s ease",
-                    }}
-                    onClick={() => handleClickOpen(image.url, image.name)}
-                  />
-                ))}
-              </div>
-            </>
-          )}
+              </Tooltip>
+            </IconButton>
+          </Box>
         </Toolbar>
+
+        {!isMobile && (
+          <Box
+            sx={{
+              px: 2,
+              pb: 1,
+              display: "flex",
+              gap: 1,
+              justifyContent: "flex-start",
+              overflowX: "auto",
+            }}
+          >
+            {images.map((image, index) => (
+              <img
+                key={index}
+                src={image.url}
+                alt={`illustration ${index}`}
+                className="header-thumbnail"
+                style={{
+                  width: "40px",
+                  height: "40px",
+                  cursor: "pointer",
+                  borderRadius: "8px",
+                  border: "1.5px solid rgba(164, 180, 148, 0.4)",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+                  transition: "all 0.3s ease",
+                }}
+                onClick={() => handleClickOpen(image.url, image.name)}
+              />
+            ))}
+          </Box>
+        )}
       </AppBar>
 
       <Snackbar

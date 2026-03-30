@@ -33,6 +33,22 @@ The website uses **GitHub** as its **Content Management System**. All articles a
 - **Firebase Hosting**  
 - **GitHub API Integration**  
 
+## GitHub Login Setup
+
+Editing sections from the website now uses GitHub OAuth through Firebase Authentication.
+
+1. Enable `GitHub` as a sign-in provider in your Firebase project Authentication settings.
+2. Add these environment variables to a local `.env` file:
+
+```
+REACT_APP_FIREBASE_API_KEY=...
+REACT_APP_FIREBASE_AUTH_DOMAIN=...
+REACT_APP_FIREBASE_PROJECT_ID=...
+REACT_APP_FIREBASE_APP_ID=...
+```
+
+3. Restart the app after updating environment variables.
+
 ## License  
 
 This project is shared under the **MIT License**. Feel free to read, share, or fork the content.
