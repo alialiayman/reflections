@@ -51,7 +51,9 @@
 
 قسّمت هذه الموضوعات إلى فئات واضحة، وسأتناولها تباعًا ضمن الأقسام التالية.
 
-{{folderList}}
+|   |   |   |
+| --- | --- | --- |
+| [علم النفس](https://a-reflections.web.app/2%20%D8%B9%D9%84%D9%85%20%D8%A7%D9%84%D9%86%D9%81%D8%B3) [[FOLDER_SUBTITLE]] النفس البشريه والكون المنظور | [القرآن](https://a-reflections.web.app/3%20%D8%A7%D9%84%D9%82%D8%B1%D8%A2%D9%86) [[FOLDER_SUBTITLE]] القرآن تبيان لكل شئ | [الآثار](https://a-reflections.web.app/4%20%D8%A7%D9%84%D8%A2%D8%AB%D8%A7%D8%B1) [[FOLDER_SUBTITLE]] قدماء المصريين |
 
 
 
@@ -82,5 +84,3 @@
 [- المستشار احمد عبده ماهر](https://www.youtube.com/@Ahmed-Maher1945)
 
 [- رشيد الجراح](https://youtube.com/@drrasheed-official-channel)
-
-
