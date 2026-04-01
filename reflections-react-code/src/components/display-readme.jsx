@@ -1,17 +1,21 @@
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditIcon from '@mui/icons-material/Edit';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import CancelIcon from '@mui/icons-material/Cancel';
+import ImageIcon from '@mui/icons-material/Image';
+import SaveIcon from '@mui/icons-material/Save';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import Snackbar from '@mui/material/Snackbar';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import { Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { GITHUB } from '../constants';
+import { GITHUB, getVisionKey } from '../constants';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -23,6 +27,7 @@ const FOLDER_SUBTITLE_TOKEN = '[[FOLDER_SUBTITLE]]';
 const FOLDER_SUBTITLE_TOKEN_REGEX = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/i;
 const FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/gi;
 const GITHUB_DEFAULT_BRANCH = 'main';
+const DEFAULT_GENERATED_IMAGE_EXTENSION = '.png';
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -86,6 +91,26 @@ const toBase64Utf8 = (value) => {
     });
 
     return window.btoa(binary);
+};
+
+const stripMarkdownHeadingMarks = (value) =>
+    (value || '')
+        .replace(/^#{1,6}\s*/gm, '')
+        .replace(/[*_`~]/g, '')
+        .trim();
+
+const toSafeArabicFileStem = (value) => {
+    const cleaned = (value || '')
+        .replace(/[\\/:*?"<>|]/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
+    return cleaned || 'صورة';
+};
+
+const extractLeadingNumber = (name = '') => {
+    const match = name.match(/^(\d+)/);
+    return match ? Number.parseInt(match[1], 10) : null;
 };
 
 const buildFolderUrl = (currentPath, folderName) => {
@@ -320,6 +345,8 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
     const [editingSectionIndex, setEditingSectionIndex] = useState(null);
     const [editingMarkdown, setEditingMarkdown] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
+    const [rewordingSectionIndex, setRewordingSectionIndex] = useState(null);
+    const [generatingImageSectionIndex, setGeneratingImageSectionIndex] = useState(null);
     const [snackbarState, setSnackbarState] = useState({
         open: false,
         message: '',
@@ -515,6 +542,205 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
         }
     };
 
+    const handleRewordSection = async (idx) => {
+        const sourceMarkdown = editingSectionIndex === idx
+            ? editingMarkdown
+            : sections[idx]?.markdown || '';
+
+        if (!sourceMarkdown.trim()) {
+            setSnackbarState({
+                open: true,
+                message: 'No section text available to reword.',
+                severity: 'warning'
+            });
+            return;
+        }
+
+        setRewordingSectionIndex(idx);
+        try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getVisionKey()}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'You are an Arabic writing editor. Reword text to be clearer while preserving meaning and Markdown structure exactly.'
+                        },
+                        {
+                            role: 'user',
+                            content: `أعد صياغة النص التالي بالعربية فقط، وحافظ على نفس بنية Markdown والعناوين:\n\n${sourceMarkdown}`
+                        }
+                    ],
+                    temperature: 0.6,
+                    max_tokens: 2500
+                })
+            });
+
+            const data = await response.json();
+            const rewritten = data?.choices?.[0]?.message?.content?.trim();
+            if (!rewritten) {
+                throw new Error('No reworded content returned');
+            }
+
+            if (editingSectionIndex !== idx) {
+                setEditingSectionIndex(idx);
+            }
+            setEditingMarkdown(rewritten);
+            setSnackbarState({
+                open: true,
+                message: 'Section reworded successfully. Review then save.',
+                severity: 'success'
+            });
+        } catch {
+            setSnackbarState({
+                open: true,
+                message: 'Failed to reword section. Please try again.',
+                severity: 'error'
+            });
+        } finally {
+            setRewordingSectionIndex(null);
+        }
+    };
+
+    const getNextImageNumberInFolder = async () => {
+        const encodedPath = toEncodedRepoPath(path);
+        const folderApi = encodedPath
+            ? `${REPO_CONTENTS_API_BASE}/${encodedPath}?ref=${GITHUB_DEFAULT_BRANCH}`
+            : `${REPO_CONTENTS_API_BASE}?ref=${GITHUB_DEFAULT_BRANCH}`;
+
+        const response = await axios.get(folderApi, {
+            headers: {
+                Authorization: `Bearer ${githubToken}`,
+                Accept: 'application/vnd.github+json'
+            }
+        });
+
+        const items = Array.isArray(response.data) ? response.data : [];
+        const imageNumbers = items
+            .filter((item) => item.type === 'file' && /\.(png|jpe?g|webp)$/i.test(item.name))
+            .map((item) => extractLeadingNumber(item.name))
+            .filter((value) => Number.isInteger(value));
+
+        const maxNumber = imageNumbers.length ? Math.max(...imageNumbers) : 0;
+        return maxNumber + 1;
+    };
+
+    const handleGenerateSectionImage = async (idx) => {
+        if (!hasRepoWriteAccess || !githubToken) {
+            setSnackbarState({
+                open: true,
+                message: 'GitHub write access is required to generate and save an image.',
+                severity: 'warning'
+            });
+            return;
+        }
+
+        const sourceMarkdown = editingSectionIndex === idx
+            ? editingMarkdown
+            : sections[idx]?.markdown || '';
+        const sectionText = stripMarkdownHeadingMarks(sourceMarkdown);
+
+        if (!sectionText.trim()) {
+            setSnackbarState({
+                open: true,
+                message: 'Section text is empty. Cannot generate image.',
+                severity: 'warning'
+            });
+            return;
+        }
+
+        setGeneratingImageSectionIndex(idx);
+
+        try {
+            const nameResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getVisionKey()}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Generate short Arabic file names. Return Arabic text only with no punctuation, no numbers, no extension.'
+                        },
+                        {
+                            role: 'user',
+                            content: `اقترح اسماً عربياً قصيراً لصورة تمثل هذا النص:\n\n${sectionText}`
+                        }
+                    ],
+                    max_tokens: 80,
+                    temperature: 0.5
+                })
+            });
+            const nameData = await nameResponse.json();
+            const recommendedStem = toSafeArabicFileStem(nameData?.choices?.[0]?.message?.content || 'صورة');
+
+            const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getVisionKey()}`
+                },
+                body: JSON.stringify({
+                    model: 'gpt-image-1',
+                    prompt: `أنشئ صورة فنية واقعية تعبر عن هذا النص العربي بدون أي كتابة على الصورة:\n\n${sectionText}`,
+                    size: '1024x1024'
+                })
+            });
+            const imageData = await imageResponse.json();
+            const imageB64 = imageData?.data?.[0]?.b64_json;
+            if (!imageB64) {
+                throw new Error('No generated image returned');
+            }
+
+            const nextNumber = await getNextImageNumberInFolder();
+            const generatedFileName = `${nextNumber} ${recommendedStem}${DEFAULT_GENERATED_IMAGE_EXTENSION}`;
+            const githubImagePath = [...getNormalizedPathSegments(path), generatedFileName].join('/');
+            const encodedImagePath = toEncodedGitHubContentsPath(githubImagePath);
+            const imageContentsUrl = `${REPO_CONTENTS_API_BASE}/${encodedImagePath}`;
+
+            await axios.put(
+                imageContentsUrl,
+                {
+                    message: `Add generated section image: ${generatedFileName}`,
+                    content: imageB64,
+                    branch: GITHUB_DEFAULT_BRANCH
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${githubToken}`,
+                        Accept: 'application/vnd.github+json'
+                    }
+                }
+            );
+
+            setSnackbarState({
+                open: true,
+                message: `Image generated and saved: ${generatedFileName}`,
+                severity: 'success'
+            });
+        } catch (error) {
+            const status = error?.response?.status;
+            const apiMessage = error?.response?.data?.message;
+            setSnackbarState({
+                open: true,
+                message: apiMessage
+                    ? `Failed to generate image (${status || 'error'}): ${apiMessage}`
+                    : 'Failed to generate and save section image.',
+                severity: 'error'
+            });
+        } finally {
+            setGeneratingImageSectionIndex(null);
+        }
+    };
+
     const canEditSections = hasRepoWriteAccess && Boolean(githubToken);
 
     return (
@@ -562,30 +788,65 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
                                             minRows={8}
                                             value={editingMarkdown}
                                             onChange={(event) => setEditingMarkdown(event.target.value)}
-                                            disabled={savingEdit}
+                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
                                             sx={{
                                                 '& .MuiInputBase-inputMultiline': {
-                                                    fontFamily: '"Cairo", "Noto Naskh Arabic", "Segoe UI", sans-serif',
+                                                    fontFamily: '"Roboto", "Segoe UI", sans-serif',
                                                     fontSize: '1.03rem',
                                                     lineHeight: 1.9
                                                 }
                                             }}
                                         />
                                         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                                            <Button
-                                                variant="contained"
-                                                onClick={() => handleSaveEdit(idx)}
-                                                disabled={savingEdit}
-                                            >
-                                                {savingEdit ? 'Saving...' : 'Save to GitHub'}
-                                            </Button>
-                                            <Button
-                                                variant="outlined"
-                                                onClick={handleCancelEdit}
-                                                disabled={savingEdit}
-                                            >
-                                                Cancel
-                                            </Button>
+                                            <Tooltip title="Save to GitHub">
+                                                <span>
+                                                    <IconButton
+                                                        color="primary"
+                                                        onClick={() => handleSaveEdit(idx)}
+                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                    >
+                                                        <SaveIcon fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                            <Tooltip title="Cancel editing">
+                                                <span>
+                                                    <IconButton
+                                                        color="default"
+                                                        onClick={handleCancelEdit}
+                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                    >
+                                                        <CancelIcon fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                            <Tooltip title="Reword section with OpenAI">
+                                                <span>
+                                                    <IconButton
+                                                        color="secondary"
+                                                        onClick={() => handleRewordSection(idx)}
+                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                    >
+                                                        <AutoFixHighIcon fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                            <Tooltip title="Generate section image and save to GitHub">
+                                                <span>
+                                                    <IconButton
+                                                        color="success"
+                                                        onClick={() => handleGenerateSectionImage(idx)}
+                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                    >
+                                                        <ImageIcon fontSize="small" />
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                            {(rewordingSectionIndex === idx || generatingImageSectionIndex === idx) && (
+                                                <Typography variant="caption" sx={{ alignSelf: 'center' }}>
+                                                    {rewordingSectionIndex === idx ? 'Rewording...' : 'Generating image...'}
+                                                </Typography>
+                                            )}
                                         </Box>
                                     </div>
                                 ) : (

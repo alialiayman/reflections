@@ -13,13 +13,14 @@ import {
   Typography,
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import SendIcon from "@mui/icons-material/Send";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
-import { getVisionKey } from "./constants";
+import { GITHUB, getVisionKey } from "./constants";
 import {
   isGithubAuthConfigured,
   onGithubAuthChanged,
@@ -33,6 +34,8 @@ const GITHUB_REPO_OWNER = "alialiayman";
 const GITHUB_REPO_NAME = "reflections";
 const GITHUB_ACCESS_TOKEN_STORAGE_KEY = "reflections_github_access_token";
 const GITHUB_LOGIN_STORAGE_KEY = "reflections_github_login";
+
+const FALLBACK_IMAGE_NAME = "صورة";
 
 const safelyDecodeURIComponent = (value) => {
   try {
@@ -48,6 +51,56 @@ const getNormalizedPathSegments = (pathname) =>
     .filter(Boolean)
     .map((segment) => safelyDecodeURIComponent(segment).trim())
     .filter(Boolean);
+
+const getFileNameParts = (fileName = "") => {
+  const clean = fileName.trim();
+  if (!clean) {
+    return { extension: ".png", stem: FALLBACK_IMAGE_NAME };
+  }
+
+  const dotIndex = clean.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return { extension: ".png", stem: clean };
+  }
+
+  return {
+    extension: clean.slice(dotIndex),
+    stem: clean.slice(0, dotIndex),
+  };
+};
+
+const splitNumericPrefix = (stem = "") => {
+  const match = stem.match(/^(\d+)\s*(.*)$/);
+  if (!match) {
+    return { number: 1, baseName: stem.trim() || FALLBACK_IMAGE_NAME };
+  }
+
+  const parsedNumber = Number.parseInt(match[1], 10);
+  return {
+    number: Number.isNaN(parsedNumber) ? 1 : parsedNumber,
+    baseName: (match[2] || "").trim() || FALLBACK_IMAGE_NAME,
+  };
+};
+
+const extractSuggestedArabicName = (text = "") => {
+  const match = text.match(/^\s*اسم\s+مقترح\s*:\s*(.+)$/im);
+  if (!match) {
+    return "";
+  }
+
+  return match[1]
+    .replace(/^['"\s]+|['"\s]+$/g, "")
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
+
+const toEncodedGitHubContentsPath = (repoPath = "") =>
+  repoPath
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 
 function getCopyLimitFromQuery() {
   const query = window.location.search;
@@ -75,6 +128,10 @@ function App() {
   const [userQuestion, setUserQuestion] = useState("");
   const [askingQuestion, setAskingQuestion] = useState(false);
   const [imageBase64Data, setImageBase64Data] = useState(null);
+  const [imageNameNumber, setImageNameNumber] = useState(1);
+  const [editableImageName, setEditableImageName] = useState(FALLBACK_IMAGE_NAME);
+  const [selectedImageExtension, setSelectedImageExtension] = useState(".png");
+  const [renamingImage, setRenamingImage] = useState(false);
   const [githubToken, setGithubToken] = useState(
     () => localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY) || ""
   );
@@ -370,6 +427,11 @@ function App() {
   const handleClickOpen = (imageUrl, imageName) => {
     setSelectedImage(imageUrl);
     setSelectedImageName(imageName || "");
+    const { extension, stem } = getFileNameParts(imageName || "");
+    const { number, baseName } = splitNumericPrefix(stem);
+    setSelectedImageExtension(extension || ".png");
+    setImageNameNumber(number);
+    setEditableImageName(baseName);
     setOpen(true);
   };
 
@@ -381,6 +443,9 @@ function App() {
     setChatMessages([]);
     setUserQuestion("");
     setImageBase64Data(null);
+    setImageNameNumber(1);
+    setEditableImageName(FALLBACK_IMAGE_NAME);
+    setSelectedImageExtension(".png");
   };
 
   const handleDescribeImage = async () => {
@@ -437,7 +502,7 @@ Use the following correspondences between ancient/historical figures and Quranic
 
 When relevant, explain the image from a Quranic perspective using these correspondences.
 
-Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name for this image (less than 15 words). Finally, add a line of relevant hashtags in English.` },
+Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file name for this image (less than 15 words, Arabic letters only, no numbers, no extension, no English words). Finally, add a line of relevant hashtags in English.` },
                 {
                   type: "image_url",
                   image_url: {
@@ -453,6 +518,10 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
 
       const data = await res.json();
       const content = data.choices?.[0]?.message?.content || "No description returned.";
+      const suggestedArabicName = extractSuggestedArabicName(content);
+      if (suggestedArabicName) {
+        setEditableImageName(suggestedArabicName);
+      }
       setImageDescription(content);
       setChatMessages([
         { role: "assistant", content },
@@ -516,6 +585,131 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
       setAskingQuestion(false);
     }
   };
+
+  const handleRenameImageOnGithub = async () => {
+    if (!hasRepoWriteAccess || !githubToken) {
+      setCopyToast({
+        open: true,
+        message: "GitHub write access is required to rename images.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    if (!selectedImageName) {
+      setCopyToast({
+        open: true,
+        message: "No selected image to rename.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    const currentName = selectedImageName.trim();
+    const targetName = suggestedFullImageName.trim();
+    if (!targetName) {
+      setCopyToast({
+        open: true,
+        message: "Target image name cannot be empty.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    if (currentName === targetName) {
+      setCopyToast({
+        open: true,
+        message: "The new image name is the same as the current one.",
+        severity: "info",
+      });
+      return;
+    }
+
+    const currentRepoPath = [...normalizedPathSegments, currentName].join("/");
+    const targetRepoPath = [...normalizedPathSegments, targetName].join("/");
+    const currentContentsUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${toEncodedGitHubContentsPath(currentRepoPath)}`;
+    const targetContentsUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${toEncodedGitHubContentsPath(targetRepoPath)}`;
+
+    setRenamingImage(true);
+    try {
+      const fileResponse = await axios.get(`${currentContentsUrl}?ref=main`, {
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: "application/vnd.github+json",
+        },
+      });
+
+      const fileSha = fileResponse.data?.sha;
+      const fileContent = fileResponse.data?.content;
+      if (!fileSha || !fileContent) {
+        throw new Error("Could not read existing image content");
+      }
+
+      await axios.put(
+        targetContentsUrl,
+        {
+          message: `Rename image: ${currentName} -> ${targetName}`,
+          content: String(fileContent).replace(/\n/g, ""),
+          branch: "main",
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+            Accept: "application/vnd.github+json",
+          },
+        }
+      );
+
+      await axios.delete(currentContentsUrl, {
+        headers: {
+          Authorization: `Bearer ${githubToken}`,
+          Accept: "application/vnd.github+json",
+        },
+        data: {
+          message: `Delete old image after rename: ${currentName}`,
+          sha: fileSha,
+          branch: "main",
+        },
+      });
+
+      const updatedImageUrl = `${GITHUB}/${toEncodedGitHubContentsPath(targetRepoPath)}?v=${Date.now()}`;
+      setSelectedImageName(targetName);
+      setSelectedImage(updatedImageUrl);
+      setImages((previous) =>
+        previous.map((image) =>
+          image.name === currentName
+            ? { ...image, name: targetName, url: updatedImageUrl }
+            : image
+        )
+      );
+
+      setCopyToast({
+        open: true,
+        message: `Image renamed to ${targetName}`,
+        severity: "success",
+      });
+    } catch (error) {
+      const apiMessage = error?.response?.data?.message;
+      setCopyToast({
+        open: true,
+        message: apiMessage
+          ? `Rename failed: ${apiMessage}`
+          : "Failed to rename image on GitHub.",
+        severity: "error",
+      });
+    } finally {
+      setRenamingImage(false);
+    }
+  };
+
+  const normalizedImageNumber = Number.isFinite(imageNameNumber) && imageNameNumber > 0
+    ? Math.floor(imageNameNumber)
+    : 1;
+  const normalizedImageBaseName = (editableImageName || FALLBACK_IMAGE_NAME)
+    .replace(/[\\/:*?"<>|]/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim() || FALLBACK_IMAGE_NAME;
+  const suggestedFullImageName = `${normalizedImageNumber} ${normalizedImageBaseName}${selectedImageExtension || ".png"}`;
 
   return (
     <>
@@ -649,49 +843,103 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                     </Button>
                   )
                 ) : (
-                  // Ask follow-up input
-                  <TextField
-                    value={userQuestion}
-                    onChange={(e) => setUserQuestion(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleAskQuestion();
-                      }
-                    }}
-                    placeholder="اسأل عن الصورة..."
-                    variant="outlined"
-                    size="small"
-                    fullWidth
-                    disabled={askingQuestion}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          {askingQuestion ? (
-                            <CircularProgress size={22} sx={{ color: "#aaa" }} />
-                          ) : (
-                            <IconButton
-                              onClick={handleAskQuestion}
-                              disabled={!userQuestion.trim()}
-                              size="small"
-                              sx={{ color: "#aaa" }}
-                            >
-                              <SendIcon fontSize="small" />
-                            </IconButton>
-                          )}
-                        </InputAdornment>
-                      ),
-                      sx: {
-                        fontFamily: '"Cairo", "Noto Naskh Arabic", "Segoe UI", sans-serif',
-                        fontSize: "0.9rem",
-                        color: "#e0e0e0",
-                        borderRadius: 3,
-                        "& fieldset": { borderColor: "#444" },
-                        "&:hover fieldset": { borderColor: "#888" },
-                        "&.Mui-focused fieldset": { borderColor: "#6C63FF" },
-                      },
-                    }}
-                  />
+                  <>
+                    <Box sx={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 1, mb: 1 }}>
+                    <TextField
+                      type="number"
+                      label="رقم"
+                      size="small"
+                      value={normalizedImageNumber}
+                      onChange={(event) => {
+                        const parsed = Number.parseInt(event.target.value || "1", 10);
+                        setImageNameNumber(Number.isNaN(parsed) ? 1 : Math.max(1, parsed));
+                      }}
+                      inputProps={{ min: 1 }}
+                      sx={{
+                        "& .MuiInputBase-input": { fontFamily: '"Roboto", "Segoe UI", sans-serif' }
+                      }}
+                    />
+                    <TextField
+                      label="اسم الصورة المقترح"
+                      size="small"
+                      value={editableImageName}
+                      onChange={(event) => setEditableImageName(event.target.value)}
+                      sx={{
+                        "& .MuiInputBase-input": { fontFamily: '"Roboto", "Segoe UI", sans-serif' }
+                      }}
+                    />
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        color: "#b6bdc7",
+                        mb: 1,
+                        fontFamily: '"Roboto", "Segoe UI", sans-serif'
+                      }}
+                    >
+                      {`الاسم النهائي: ${suggestedFullImageName}`}
+                    </Typography>
+                    <Button
+                      onClick={handleRenameImageOnGithub}
+                      variant="outlined"
+                      size="small"
+                      startIcon={renamingImage ? <CircularProgress size={14} /> : <DriveFileRenameOutlineIcon />}
+                      disabled={renamingImage || !hasRepoWriteAccess || !githubToken}
+                      sx={{
+                        mb: 1,
+                        textTransform: "none",
+                        fontFamily: '"Roboto", "Segoe UI", sans-serif',
+                        color: "#9ec5b3",
+                        borderColor: "rgba(158,197,179,0.5)",
+                      }}
+                    >
+                      {renamingImage ? "Renaming..." : "Rename on GitHub"}
+                    </Button>
+
+                    <TextField
+                      value={userQuestion}
+                      onChange={(e) => setUserQuestion(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAskQuestion();
+                        }
+                      }}
+                      placeholder="اسأل عن الصورة..."
+                      variant="outlined"
+                      size="small"
+                      fullWidth
+                      disabled={askingQuestion}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            {askingQuestion ? (
+                              <CircularProgress size={22} sx={{ color: "#aaa" }} />
+                            ) : (
+                              <IconButton
+                                onClick={handleAskQuestion}
+                                disabled={!userQuestion.trim()}
+                                size="small"
+                                sx={{ color: "#aaa" }}
+                              >
+                                <SendIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </InputAdornment>
+                        ),
+                        sx: {
+                          fontFamily: '"Roboto", "Segoe UI", sans-serif',
+                          fontSize: "0.9rem",
+                          color: "#e0e0e0",
+                          borderRadius: 3,
+                          "& fieldset": { borderColor: "#444" },
+                          "&:hover fieldset": { borderColor: "#888" },
+                          "&.Mui-focused fieldset": { borderColor: "#6C63FF" },
+                        },
+                      }}
+                    />
+                  </>
                 )}
               </Box>
             </Box>
@@ -733,7 +981,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                         whiteSpace: "pre-wrap",
                         lineHeight: 1.8,
                         fontSize: "1.05rem",
-                        fontFamily: '"Cairo", "Noto Naskh Arabic", "Segoe UI", sans-serif',
+                        fontFamily: '"Roboto", "Segoe UI", sans-serif',
                       }}
                     >
                       {msg.content}
