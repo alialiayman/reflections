@@ -1,5 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import '@fontsource/cairo/400.css';
+import '@fontsource/cairo/500.css';
+import '@fontsource/cairo/700.css';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';

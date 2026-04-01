@@ -14,13 +14,25 @@ import {
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import SendIcon from "@mui/icons-material/Send";
+import axios from "axios";
 import { useEffect, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
 import { getVisionKey } from "./constants";
+import {
+  isGithubAuthConfigured,
+  onGithubAuthChanged,
+  signInWithGithub,
+  signOutGithub,
+} from "./utils/github-auth";
 
 const DEFAULT_COPY_LIMIT = 3500;
+const GITHUB_API_BASE = "https://api.github.com";
+const GITHUB_REPO_OWNER = "alialiayman";
+const GITHUB_REPO_NAME = "reflections";
+const GITHUB_ACCESS_TOKEN_STORAGE_KEY = "reflections_github_access_token";
+const GITHUB_LOGIN_STORAGE_KEY = "reflections_github_login";
 
 const safelyDecodeURIComponent = (value) => {
   try {
@@ -63,6 +75,16 @@ function App() {
   const [userQuestion, setUserQuestion] = useState("");
   const [askingQuestion, setAskingQuestion] = useState(false);
   const [imageBase64Data, setImageBase64Data] = useState(null);
+  const [githubToken, setGithubToken] = useState(
+    () => localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY) || ""
+  );
+  const [githubLogin, setGithubLogin] = useState(
+    () => localStorage.getItem(GITHUB_LOGIN_STORAGE_KEY) || ""
+  );
+  const [oauthConfigured] = useState(() => isGithubAuthConfigured());
+  const [hasRepoWriteAccess, setHasRepoWriteAccess] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authChecking, setAuthChecking] = useState(false);
 
 
   const borderColors = [
@@ -84,6 +106,87 @@ function App() {
   const apiPath = normalizedPathSegments
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+
+  useEffect(() => {
+    if (!oauthConfigured) {
+      return () => {};
+    }
+
+    return onGithubAuthChanged((user) => {
+      if (!user) {
+        return;
+      }
+
+      if (user?.reloadUserInfo?.screenName) {
+        const login = user.reloadUserInfo.screenName;
+        setGithubLogin(login);
+        localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
+      } else if (user?.providerData?.[0]?.uid) {
+        const login = user.providerData[0].uid;
+        setGithubLogin(login);
+        localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
+      }
+    });
+  }, [oauthConfigured]);
+
+  useEffect(() => {
+    if (!githubToken) {
+      setHasRepoWriteAccess(false);
+      setAuthChecking(false);
+      return;
+    }
+
+    let cancelled = false;
+    const verifyRepoAccess = async () => {
+      setAuthChecking(true);
+
+      try {
+        const response = await axios.get(
+          `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
+          {
+            headers: {
+              Authorization: `Bearer ${githubToken}`,
+              Accept: "application/vnd.github+json",
+            },
+          }
+        );
+
+        const canPush = Boolean(response.data?.permissions?.push);
+        if (!cancelled) {
+          setHasRepoWriteAccess(canPush);
+        }
+
+        if (!canPush && !cancelled) {
+          setCopyToast({
+            open: true,
+            message:
+              "GitHub token is valid but does not have write access to this repository.",
+            severity: "warning",
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setHasRepoWriteAccess(false);
+          localStorage.removeItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
+          setGithubToken("");
+          setCopyToast({
+            open: true,
+            message: "GitHub authentication failed. Please sign in again.",
+            severity: "error",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setAuthChecking(false);
+        }
+      }
+    };
+
+    verifyRepoAccess();
+    return () => {
+      cancelled = true;
+    };
+  }, [githubToken]);
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -203,6 +306,64 @@ function App() {
     }
 
     setCopyToast((current) => ({ ...current, open: false }));
+  };
+
+  const handleSignInGithub = async () => {
+    if (!oauthConfigured) {
+      setCopyToast({
+        open: true,
+        message:
+          "GitHub OAuth is not configured yet. Add Firebase env vars to enable sign-in.",
+        severity: "warning",
+      });
+      return;
+    }
+
+    try {
+      setAuthLoading(true);
+      const { user, accessToken } = await signInWithGithub();
+
+      if (!accessToken) {
+        throw new Error("Missing GitHub access token.");
+      }
+
+      const login =
+        user?.reloadUserInfo?.screenName || user?.providerData?.[0]?.uid || "";
+      if (login) {
+        setGithubLogin(login);
+        localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
+      }
+
+      localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, accessToken);
+      setGithubToken(accessToken);
+      setCopyToast({
+        open: true,
+        message: "Signed in with GitHub.",
+        severity: "success",
+      });
+    } catch {
+      setCopyToast({
+        open: true,
+        message: "GitHub sign-in failed. Please try again.",
+        severity: "error",
+      });
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleSignOutGithub = async () => {
+    await signOutGithub();
+    localStorage.removeItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
+    localStorage.removeItem(GITHUB_LOGIN_STORAGE_KEY);
+    setGithubToken("");
+    setGithubLogin("");
+    setHasRepoWriteAccess(false);
+    setCopyToast({
+      open: true,
+      message: "Signed out from GitHub editor mode.",
+      severity: "info",
+    });
   };
 
   
@@ -369,10 +530,22 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
         loading={loadingChunks}
         previewMode={previewMode}
         onTogglePreview={() => setPreviewMode((current) => !current)}
+        githubLogin={githubLogin}
+        oauthConfigured={oauthConfigured}
+        canEditSections={hasRepoWriteAccess && Boolean(githubToken)}
+        authLoading={authLoading}
+        authChecking={authChecking}
+        onSignInGithub={handleSignInGithub}
+        onSignOutGithub={handleSignOutGithub}
       />
       <div id="print-header" style={{display: 'none'}}></div>
       <Container p={2} mt={2}>
-        <Main previewMode={previewMode} images={images} />
+        <Main
+          previewMode={previewMode}
+          images={images}
+          githubToken={githubToken}
+          hasRepoWriteAccess={hasRepoWriteAccess}
+        />
       </Container>
 
       {/* Modal for Enlarged Image */}
@@ -509,7 +682,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                         </InputAdornment>
                       ),
                       sx: {
-                        fontFamily: "Roboto, sans-serif",
+                        fontFamily: '"Cairo", "Noto Naskh Arabic", "Segoe UI", sans-serif',
                         fontSize: "0.9rem",
                         color: "#e0e0e0",
                         borderRadius: 3,
@@ -560,7 +733,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic name fo
                         whiteSpace: "pre-wrap",
                         lineHeight: 1.8,
                         fontSize: "1.05rem",
-                        fontFamily: "Roboto, sans-serif",
+                        fontFamily: '"Cairo", "Noto Naskh Arabic", "Segoe UI", sans-serif',
                       }}
                     >
                       {msg.content}

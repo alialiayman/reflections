@@ -17,7 +17,7 @@ const getNormalizedPathSegments = (pathname) =>
     .map((segment) => safelyDecodeURIComponent(segment).trim())
     .filter(Boolean);
 
-export default function Main({ previewMode, images }) {
+export default function Main({ previewMode, images, githubToken, hasRepoWriteAccess }) {
   const path = window.location.pathname;
   const pathSegments = getNormalizedPathSegments(path);
   const encodedPath = pathSegments.map((segment) => encodeURIComponent(segment)).join("/");
@@ -28,7 +28,15 @@ export default function Main({ previewMode, images }) {
 
   return (
     <div id="readme">
-      {previewMode ? <EpubPreview path={canonicalPath} images={images} /> : <DisplayReadme path={canonicalPath} />}
+      {previewMode ? (
+        <EpubPreview path={canonicalPath} images={images} />
+      ) : (
+        <DisplayReadme
+          path={canonicalPath}
+          githubToken={githubToken}
+          hasRepoWriteAccess={hasRepoWriteAccess}
+        />
+      )}
       <Typography
         variant="caption"
         color="textSecondary"

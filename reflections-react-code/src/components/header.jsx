@@ -1,14 +1,19 @@
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import HomeIcon from "@mui/icons-material/Home";
+import LoginIcon from "@mui/icons-material/Login";
+import LogoutIcon from "@mui/icons-material/Logout";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import TranslateIcon from "@mui/icons-material/Translate";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
   Alert,
+  Avatar,
   AppBar,
   Box,
+  Button,
   CircularProgress,
+  Chip,
   IconButton,
   Snackbar,
   Toolbar,
@@ -30,6 +35,13 @@ const Header = ({
   loading,
   previewMode,
   onTogglePreview,
+  githubLogin,
+  oauthConfigured,
+  canEditSections,
+  authLoading,
+  authChecking,
+  onSignInGithub,
+  onSignOutGithub,
   ...props
 }) => {
   const theme = useTheme();
@@ -97,92 +109,132 @@ const Header = ({
             px: { xs: 1, sm: 2 },
             justifyContent: "space-between",
             alignItems: "center",
-            gap: 1,
+            gap: 1.5,
+            flexWrap: "wrap",
             pt: "max(env(safe-area-inset-top), 0px)",
+            pb: { xs: 1, sm: 1.25 },
           }}
         >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-            <IconButton color="inherit" href="/" aria-label="home">
-              <Tooltip title="Home">
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <Tooltip title="Home">
+              <IconButton color="inherit" href="/" aria-label="home">
                 <HomeIcon />
-              </Tooltip>
-            </IconButton>
+              </IconButton>
+            </Tooltip>
+            <Typography variant="body2" sx={{ fontWeight: 600, opacity: 0.9 }}>
+              Reflections
+            </Typography>
           </Box>
 
           <Box
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: { xs: 0.5, sm: 1 },
+              gap: 0.75,
               overflowX: "auto",
-              maxWidth: { xs: "78vw", sm: "none" },
+              maxWidth: { xs: "100%", md: "none" },
               "&::-webkit-scrollbar": { display: "none" },
               scrollbarWidth: "none",
             }}
           >
-            <IconButton
+            <Button
+              size="small"
+              variant="outlined"
               color="inherit"
+              startIcon={<GitHubIcon />}
               href={`https://github.com/alialiayman/reflections${
                 path === "/" ? "" : "/tree/main" + path
               }`}
               target="_blank"
-              aria-label="GitHub"
+              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
             >
-              <Tooltip title="GitHub">
-                <GitHubIcon />
-              </Tooltip>
-            </IconButton>
-
+              Repo
+            </Button>
             {!loading && (
-              <IconButton
+              <Button
+                size="small"
+                variant="outlined"
                 color="inherit"
+                startIcon={<ContentCopyIcon />}
                 onClick={handleCopy}
-                aria-label="Copy to Clipboard"
+                sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
               >
-                <Tooltip title="Copy All">
-                  {!copied ? (
-                    <ContentCopyIcon />
-                  ) : (
-                    <Typography variant="body">{`Copied ${copyIndex}/${textChunks.length}`}</Typography>
-                  )}
-                </Tooltip>
-              </IconButton>
+                {copied ? `Copied ${copyIndex}/${textChunks.length}` : "Copy"}
+              </Button>
             )}
-
-            <IconButton
+            <Button
+              size="small"
+              variant="outlined"
               color="inherit"
-              aria-label="Translate"
+              startIcon={<TranslateIcon />}
               onClick={handleTranslate}
+              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
             >
-              <Tooltip title="Translate to English">
-                <TranslateIcon />
-              </Tooltip>
-            </IconButton>
-
-            <IconButton
+              Translate
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
               color="inherit"
-              aria-label="Toggle Preview"
+              startIcon={<VisibilityIcon />}
               onClick={onTogglePreview}
+              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
             >
-              <Tooltip title={previewMode ? "Show README" : "EPUB-like Preview"}>
-                <VisibilityIcon />
-              </Tooltip>
-            </IconButton>
-
-            <IconButton
+              {previewMode ? "README" : "Preview"}
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
               color="inherit"
-              aria-label="Export EPUB"
-              onClick={handleExportEpub}
-              disabled={exportingEpub || loading || !images.length}
-            >
-              <Tooltip title="Export EPUB">
-                {exportingEpub ? (
-                  <CircularProgress size={20} color="inherit" />
+              startIcon={
+                exportingEpub ? (
+                  <CircularProgress size={16} color="inherit" />
                 ) : (
                   <MenuBookIcon />
-                )}
-              </Tooltip>
-            </IconButton>
+                )
+              }
+              onClick={handleExportEpub}
+              disabled={exportingEpub || loading || !images.length}
+              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
+            >
+              EPUB
+            </Button>
+          </Box>
+
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {githubLogin && (
+              <Chip
+                avatar={<Avatar sx={{ bgcolor: "#264e3c" }}>{githubLogin[0]?.toUpperCase()}</Avatar>}
+                label={`@${githubLogin}`}
+                size="small"
+                sx={{ color: "#d6dfcc", border: "1px solid rgba(164, 180, 148, 0.35)" }}
+              />
+            )}
+            {authChecking && <Typography variant="caption">Checking access...</Typography>}
+            {!canEditSections ? (
+              <Button
+                size="small"
+                variant="contained"
+                startIcon={<LoginIcon />}
+                onClick={onSignInGithub}
+                disabled={authLoading || authChecking || !oauthConfigured}
+                sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+              >
+                {authLoading ? "Signing In..." : "Login with GitHub"}
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                variant="outlined"
+                color="inherit"
+                startIcon={<LogoutIcon />}
+                onClick={onSignOutGithub}
+                disabled={authLoading || authChecking}
+                sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
+              >
+                Sign Out
+              </Button>
+            )}
           </Box>
         </Toolbar>
 
@@ -195,8 +247,12 @@ const Header = ({
               gap: 1,
               justifyContent: "flex-start",
               overflowX: "auto",
+              alignItems: "center",
             }}
           >
+            <Typography variant="caption" sx={{ mr: 0.5, opacity: 0.82 }}>
+              Images in this folder
+            </Typography>
             {images.map((image, index) => (
               <img
                 key={index}

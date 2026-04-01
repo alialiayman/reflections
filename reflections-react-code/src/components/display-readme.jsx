@@ -1,7 +1,5 @@
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditIcon from '@mui/icons-material/Edit';
-import GitHubIcon from '@mui/icons-material/GitHub';
-import LogoutIcon from '@mui/icons-material/Logout';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -14,12 +12,6 @@ import React, { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GITHUB } from '../constants';
-import {
-    isGithubAuthConfigured,
-    onGithubAuthChanged,
-    signInWithGithub,
-    signOutGithub
-} from '../utils/github-auth';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -30,12 +22,7 @@ const FOLDER_LIST_FALLBACK = '⚠️ تعذر تحميل قائمة المجلد
 const FOLDER_SUBTITLE_TOKEN = '[[FOLDER_SUBTITLE]]';
 const FOLDER_SUBTITLE_TOKEN_REGEX = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/i;
 const FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/gi;
-const GITHUB_API_BASE = 'https://api.github.com';
-const GITHUB_REPO_OWNER = 'alialiayman';
-const GITHUB_REPO_NAME = 'reflections';
 const GITHUB_DEFAULT_BRANCH = 'main';
-const GITHUB_ACCESS_TOKEN_STORAGE_KEY = 'reflections_github_access_token';
-const GITHUB_LOGIN_STORAGE_KEY = 'reflections_github_login';
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -327,15 +314,9 @@ const FolderListTableCell = ({ children, ...props }) => {
 };
 
 
-const DisplayReadme = ({ path, filename = 'README.md' }) => {
+const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWriteAccess }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
-    const [githubToken, setGithubToken] = useState(() => localStorage.getItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY) || '');
-    const [githubLogin, setGithubLogin] = useState(() => localStorage.getItem(GITHUB_LOGIN_STORAGE_KEY) || '');
-    const [oauthConfigured] = useState(() => isGithubAuthConfigured());
-    const [hasRepoWriteAccess, setHasRepoWriteAccess] = useState(false);
-    const [authLoading, setAuthLoading] = useState(false);
-    const [authChecking, setAuthChecking] = useState(false);
     const [editingSectionIndex, setEditingSectionIndex] = useState(null);
     const [editingMarkdown, setEditingMarkdown] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
@@ -345,85 +326,6 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
         severity: 'success'
     });
 
-    useEffect(() => {
-        if (!oauthConfigured) {
-            return () => {};
-        }
-
-        return onGithubAuthChanged((user) => {
-            if (!user) {
-                return;
-            }
-
-            if (user?.reloadUserInfo?.screenName) {
-                const login = user.reloadUserInfo.screenName;
-                setGithubLogin(login);
-                localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
-            } else if (user?.providerData?.[0]?.uid) {
-                const login = user.providerData[0].uid;
-                setGithubLogin(login);
-                localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
-            }
-        });
-    }, [oauthConfigured]);
-
-    useEffect(() => {
-        if (!githubToken) {
-            setHasRepoWriteAccess(false);
-            setAuthChecking(false);
-            return;
-        }
-
-        let cancelled = false;
-        const verifyRepoAccess = async () => {
-            setAuthChecking(true);
-
-            try {
-                const response = await axios.get(
-                    `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${githubToken}`,
-                            Accept: 'application/vnd.github+json'
-                        }
-                    }
-                );
-
-                const canPush = Boolean(response.data?.permissions?.push);
-                if (!cancelled) {
-                    setHasRepoWriteAccess(canPush);
-                }
-
-                if (!canPush && !cancelled) {
-                    setSnackbarState({
-                        open: true,
-                        message: 'GitHub token is valid but does not have write access to this repository.',
-                        severity: 'warning'
-                    });
-                }
-            } catch {
-                if (!cancelled) {
-                    setHasRepoWriteAccess(false);
-                    localStorage.removeItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
-                    setGithubToken('');
-                    setSnackbarState({
-                        open: true,
-                        message: 'GitHub authentication failed. Please sign in again.',
-                        severity: 'error'
-                    });
-                }
-            } finally {
-                if (!cancelled) {
-                    setAuthChecking(false);
-                }
-            }
-        };
-
-        verifyRepoAccess();
-        return () => {
-            cancelled = true;
-        };
-    }, [githubToken]);
 
     useEffect(() => {
         if (path && filename) {
@@ -524,64 +426,6 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
         }
     };
 
-    const handleSignInGithub = async () => {
-        if (!oauthConfigured) {
-            setSnackbarState({
-                open: true,
-                message: 'GitHub OAuth is not configured yet. Add Firebase env vars to enable sign-in.',
-                severity: 'warning'
-            });
-            return;
-        }
-
-        try {
-            setAuthLoading(true);
-            const { user, accessToken } = await signInWithGithub();
-
-            if (!accessToken) {
-                throw new Error('Missing GitHub access token.');
-            }
-
-            const login = user?.reloadUserInfo?.screenName || user?.providerData?.[0]?.uid || '';
-            if (login) {
-                setGithubLogin(login);
-                localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
-            }
-
-            localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, accessToken);
-            setGithubToken(accessToken);
-            setSnackbarState({
-                open: true,
-                message: 'Signed in with GitHub.',
-                severity: 'success'
-            });
-        } catch {
-            setSnackbarState({
-                open: true,
-                message: 'GitHub sign-in failed. Please try again.',
-                severity: 'error'
-            });
-        } finally {
-            setAuthLoading(false);
-        }
-    };
-
-    const handleSignOutGithub = async () => {
-        await signOutGithub();
-        localStorage.removeItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
-        localStorage.removeItem(GITHUB_LOGIN_STORAGE_KEY);
-        setGithubToken('');
-        setGithubLogin('');
-        setHasRepoWriteAccess(false);
-        setEditingSectionIndex(null);
-        setEditingMarkdown('');
-        setSnackbarState({
-            open: true,
-            message: 'Signed out from GitHub editor mode.',
-            severity: 'info'
-        });
-    };
-
     const handleStartEdit = (idx) => {
         setEditingSectionIndex(idx);
         setEditingMarkdown(sections[idx]?.markdown || '');
@@ -655,10 +499,15 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                 message: 'Section updated and saved to GitHub.',
                 severity: 'success'
             });
-        } catch {
+        } catch (error) {
+            const status = error?.response?.status;
+            const apiMessage = error?.response?.data?.message;
+            const message = apiMessage
+                ? `Failed to save to GitHub (${status || 'error'}): ${apiMessage}`
+                : 'Failed to save to GitHub. Check token permissions and try again.';
             setSnackbarState({
                 open: true,
-                message: 'Failed to save to GitHub. Check token permissions and try again.',
+                message,
                 severity: 'error'
             });
         } finally {
@@ -674,50 +523,6 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                 <Typography color="error">{error}</Typography>
             ) : (
                 <div>
-                    <Box
-                        sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            gap: 1,
-                            mb: 2
-                        }}
-                    >
-                        <Typography variant="caption" color="text.secondary">
-                            {canEditSections
-                                ? 'GitHub editor mode is enabled for this repository.'
-                                : oauthConfigured
-                                    ? 'Sign in with GitHub to enable editing for this repository.'
-                                    : 'GitHub OAuth is not configured. Set Firebase env vars to enable sign in.'}
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {githubLogin && <Typography variant="caption">@{githubLogin}</Typography>}
-                            {authChecking && <Typography variant="caption">Checking access...</Typography>}
-                            {!canEditSections ? (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    startIcon={<GitHubIcon />}
-                                    onClick={handleSignInGithub}
-                                    disabled={authLoading || authChecking || !oauthConfigured}
-                                >
-                                    {authLoading ? 'Signing In...' : 'GitHub Sign In'}
-                                </Button>
-                            ) : (
-                                <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="inherit"
-                                    startIcon={<LogoutIcon />}
-                                    onClick={handleSignOutGithub}
-                                    disabled={authLoading || authChecking}
-                                >
-                                    Sign Out
-                                </Button>
-                            )}
-                        </Box>
-                    </Box>
                     <div>
                         {sections.map((section, idx) => (
                             <div
@@ -758,6 +563,13 @@ const DisplayReadme = ({ path, filename = 'README.md' }) => {
                                             value={editingMarkdown}
                                             onChange={(event) => setEditingMarkdown(event.target.value)}
                                             disabled={savingEdit}
+                                            sx={{
+                                                '& .MuiInputBase-inputMultiline': {
+                                                    fontFamily: '"Cairo", "Noto Naskh Arabic", "Segoe UI", sans-serif',
+                                                    fontSize: '1.03rem',
+                                                    lineHeight: 1.9
+                                                }
+                                            }}
                                         />
                                         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
                                             <Button
