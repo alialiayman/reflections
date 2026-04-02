@@ -11,7 +11,6 @@ import {
   Avatar,
   AppBar,
   Box,
-  Button,
   CircularProgress,
   Chip,
   IconButton,
@@ -137,68 +136,77 @@ const Header = ({
               scrollbarWidth: "none",
             }}
           >
-            <Button
-              size="small"
-              variant="outlined"
-              color="inherit"
-              startIcon={<GitHubIcon />}
-              href={`https://github.com/alialiayman/reflections${
-                path === "/" ? "" : "/tree/main" + path
-              }`}
-              target="_blank"
-              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
-            >
-              Repo
-            </Button>
-            {!loading && (
-              <Button
-                size="small"
-                variant="outlined"
+            <Tooltip title="Open GitHub repository">
+              <IconButton
                 color="inherit"
-                startIcon={<ContentCopyIcon />}
-                onClick={handleCopy}
-                sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
+                href={`https://github.com/alialiayman/reflections${
+                  path === "/" ? "" : "/tree/main" + path
+                }`}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open GitHub repository"
+                sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
               >
-                {copied ? `Copied ${copyIndex}/${textChunks.length}` : "Copy"}
-              </Button>
+                <GitHubIcon />
+              </IconButton>
+            </Tooltip>
+            {!loading && (
+              <Tooltip
+                title={
+                  copied
+                    ? `Copied ${copyIndex}/${textChunks.length}`
+                    : "Copy all text (chunked)"
+                }
+              >
+                <span>
+                  <IconButton
+                    color="inherit"
+                    onClick={handleCopy}
+                    aria-label="Copy to clipboard"
+                    sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                  >
+                    <ContentCopyIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
             )}
-            <Button
-              size="small"
-              variant="outlined"
-              color="inherit"
-              startIcon={<TranslateIcon />}
-              onClick={handleTranslate}
-              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
-            >
-              Translate
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              color="inherit"
-              startIcon={<VisibilityIcon />}
-              onClick={onTogglePreview}
-              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
-            >
-              {previewMode ? "README" : "Preview"}
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              color="inherit"
-              startIcon={
-                exportingEpub ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : (
-                  <MenuBookIcon />
-                )
-              }
-              onClick={handleExportEpub}
-              disabled={exportingEpub || loading || !images.length}
-              sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
-            >
-              EPUB
-            </Button>
+            <Tooltip title="Translate to English (Google Translate)">
+              <IconButton
+                color="inherit"
+                onClick={handleTranslate}
+                aria-label="Translate to English"
+                sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+              >
+                <TranslateIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={previewMode ? "Show README" : "EPUB-like preview"}>
+              <IconButton
+                color="inherit"
+                onClick={onTogglePreview}
+                aria-label={previewMode ? "Show README" : "EPUB preview"}
+                sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+              >
+                <VisibilityIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Export EPUB">
+              <span>
+                <IconButton
+                  color="inherit"
+                  onClick={handleExportEpub}
+                  disabled={exportingEpub || loading || !images.length}
+                  aria-label="Export EPUB"
+                  sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                >
+                  {exportingEpub ? (
+                    <CircularProgress size={22} color="inherit" />
+                  ) : (
+                    <MenuBookIcon />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
           </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -212,28 +220,48 @@ const Header = ({
             )}
             {authChecking && <Typography variant="caption">Checking access...</Typography>}
             {!canEditSections ? (
-              <Button
-                size="small"
-                variant="contained"
-                startIcon={<LoginIcon />}
-                onClick={onSignInGithub}
-                disabled={authLoading || authChecking || !oauthConfigured}
-                sx={{ textTransform: "none", whiteSpace: "nowrap" }}
+              <Tooltip
+                title={
+                  !oauthConfigured
+                    ? "GitHub login not configured"
+                    : authLoading
+                      ? "Signing in…"
+                      : "Login with GitHub"
+                }
               >
-                {authLoading ? "Signing In..." : "Login with GitHub"}
-              </Button>
+                <span>
+                  <IconButton
+                    color="inherit"
+                    onClick={onSignInGithub}
+                    disabled={authLoading || authChecking || !oauthConfigured}
+                    aria-label="Login with GitHub"
+                    sx={{
+                      bgcolor: "rgba(0, 0, 0, 0.15)",
+                      "&:hover": { bgcolor: "rgba(0, 0, 0, 0.25)" },
+                    }}
+                  >
+                    {authLoading ? (
+                      <CircularProgress size={22} color="inherit" />
+                    ) : (
+                      <LoginIcon />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
             ) : (
-              <Button
-                size="small"
-                variant="outlined"
-                color="inherit"
-                startIcon={<LogoutIcon />}
-                onClick={onSignOutGithub}
-                disabled={authLoading || authChecking}
-                sx={{ borderColor: "rgba(164, 180, 148, 0.45)", whiteSpace: "nowrap" }}
-              >
-                Sign Out
-              </Button>
+              <Tooltip title="Sign out">
+                <span>
+                  <IconButton
+                    color="inherit"
+                    onClick={onSignOutGithub}
+                    disabled={authLoading || authChecking}
+                    aria-label="Sign out"
+                    sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                  >
+                    <LogoutIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
             )}
           </Box>
         </Toolbar>

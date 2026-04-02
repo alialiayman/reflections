@@ -16,6 +16,7 @@ import React, { useEffect, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GITHUB, getVisionKey } from '../constants';
+import { REWORD_SECTION_SYSTEM_PROMPT } from '../prompts/reword-section-system-prompt';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -28,6 +29,16 @@ const FOLDER_SUBTITLE_TOKEN_REGEX = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/i;
 const FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/gi;
 const GITHUB_DEFAULT_BRANCH = 'main';
 const DEFAULT_GENERATED_IMAGE_EXTENSION = '.png';
+
+/** Western 0–9 → Arabic-Indic ٠–٩ (U+0660–U+0669), typical for Egypt / Arabic body text */
+const westernDigitsToEasternArabic = (text) => {
+    if (typeof text !== 'string') {
+        return text;
+    }
+    return text.replace(/[0-9]/g, (ch) =>
+        String.fromCharCode(0x0660 + ch.charCodeAt(0) - 0x30)
+    );
+};
 
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
@@ -346,6 +357,8 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
     const [editingMarkdown, setEditingMarkdown] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
     const [rewordingSectionIndex, setRewordingSectionIndex] = useState(null);
+    /** Snapshot of section markdown before the last successful reword; drives split compare UI */
+    const [rewordCompareOriginal, setRewordCompareOriginal] = useState(null);
     const [generatingImageSectionIndex, setGeneratingImageSectionIndex] = useState(null);
     const [snackbarState, setSnackbarState] = useState({
         open: false,
@@ -456,11 +469,13 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
     const handleStartEdit = (idx) => {
         setEditingSectionIndex(idx);
         setEditingMarkdown(sections[idx]?.markdown || '');
+        setRewordCompareOriginal(null);
     };
 
     const handleCancelEdit = () => {
         setEditingSectionIndex(null);
         setEditingMarkdown('');
+        setRewordCompareOriginal(null);
     };
 
     const handleSaveEdit = async (idx) => {
@@ -521,6 +536,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
             setSections(updatedSections);
             setEditingSectionIndex(null);
             setEditingMarkdown('');
+            setRewordCompareOriginal(null);
             setSnackbarState({
                 open: true,
                 message: 'Section updated and saved to GitHub.',
@@ -542,6 +558,17 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
         }
     };
 
+    const buildFullReadmeMarkdownForContext = (sectionIndex) => {
+        return sections
+            .map((section, i) => {
+                if (i === sectionIndex && editingSectionIndex === sectionIndex) {
+                    return editingMarkdown;
+                }
+                return section.markdown;
+            })
+            .join('\n\n');
+    };
+
     const handleRewordSection = async (idx) => {
         const sourceMarkdown = editingSectionIndex === idx
             ? editingMarkdown
@@ -556,8 +583,24 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
             return;
         }
 
+        const fullReadmeMarkdown = buildFullReadmeMarkdownForContext(idx);
+
         setRewordingSectionIndex(idx);
         try {
+            const userPayload = [
+                'فيما يلي نص المقال الكامل لملف README (للسياق فقط؛ لا تعِد كتابته كاملاً):',
+                '',
+                '---BEGIN_FULL_README---',
+                fullReadmeMarkdown,
+                '---END_FULL_README---',
+                '',
+                'أعد صياغة وتحليل **القسم المحدد فقط** أدناه وفق تعليمات النظام. أخرج نص القسم المعاد صياغته فقط، بالعربية، دون أي مقدمة أو شرح.',
+                '',
+                '---BEGIN_SECTION_TO_REWORD---',
+                sourceMarkdown,
+                '---END_SECTION_TO_REWORD---'
+            ].join('\n');
+
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -565,41 +608,55 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
                     Authorization: `Bearer ${getVisionKey()}`
                 },
                 body: JSON.stringify({
-                    model: 'gpt-4o-mini',
+                    model: 'gpt-4o',
                     messages: [
                         {
                             role: 'system',
-                            content: 'You are an Arabic writing editor. Reword text to be clearer while preserving meaning and Markdown structure exactly.'
+                            content: REWORD_SECTION_SYSTEM_PROMPT
                         },
                         {
                             role: 'user',
-                            content: `أعد صياغة النص التالي بالعربية فقط، وحافظ على نفس بنية Markdown والعناوين:\n\n${sourceMarkdown}`
+                            content: userPayload
                         }
                     ],
-                    temperature: 0.6,
-                    max_tokens: 2500
+                    temperature: 0.7,
+                    max_tokens: 8000
                 })
             });
 
             const data = await response.json();
-            const rewritten = data?.choices?.[0]?.message?.content?.trim();
+            const apiErr = data?.error?.message;
+            if (apiErr) {
+                throw new Error(apiErr);
+            }
+            let rewritten = data?.choices?.[0]?.message?.content?.trim();
             if (!rewritten) {
                 throw new Error('No reworded content returned');
             }
+            const fenceMatch = rewritten.match(/^```(?:markdown|md)?\s*\n?([\s\S]*?)\n?```$/i);
+            if (fenceMatch) {
+                rewritten = fenceMatch[1].trim();
+            }
+
+            rewritten = westernDigitsToEasternArabic(rewritten);
 
             if (editingSectionIndex !== idx) {
                 setEditingSectionIndex(idx);
             }
+            setRewordCompareOriginal(sourceMarkdown);
             setEditingMarkdown(rewritten);
             setSnackbarState({
                 open: true,
-                message: 'Section reworded successfully. Review then save.',
+                message: 'Section reworded. Compare original vs draft, edit as needed, then save.',
                 severity: 'success'
             });
-        } catch {
+        } catch (err) {
+            const detail = err instanceof Error ? err.message : '';
             setSnackbarState({
                 open: true,
-                message: 'Failed to reword section. Please try again.',
+                message: detail
+                    ? `Failed to reword section: ${detail}`
+                    : 'Failed to reword section. Please try again.',
                 severity: 'error'
             });
         } finally {
@@ -782,21 +839,111 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
 
                                 {editingSectionIndex === idx ? (
                                     <div className="markdown-content" style={{ paddingLeft: '4.25rem' }}>
-                                        <TextField
-                                            fullWidth
-                                            multiline
-                                            minRows={8}
-                                            value={editingMarkdown}
-                                            onChange={(event) => setEditingMarkdown(event.target.value)}
-                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                        <Box
                                             sx={{
-                                                '& .MuiInputBase-inputMultiline': {
-                                                    fontFamily: '"Roboto", "Segoe UI", sans-serif',
-                                                    fontSize: '1.03rem',
-                                                    lineHeight: 1.9
-                                                }
+                                                display: 'flex',
+                                                flexDirection: { xs: 'column', md: 'row' },
+                                                gap: 2,
+                                                alignItems: 'stretch',
+                                                width: '100%'
                                             }}
-                                        />
+                                        >
+                                            {rewordCompareOriginal != null && (
+                                                <Box
+                                                    sx={{
+                                                        flex: { md: '1 1 0' },
+                                                        minWidth: 0,
+                                                        display: 'flex',
+                                                        flexDirection: 'column',
+                                                        gap: 0.75
+                                                    }}
+                                                >
+                                                    <Box
+                                                        sx={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'space-between',
+                                                            gap: 1,
+                                                            flexWrap: 'wrap'
+                                                        }}
+                                                    >
+                                                        <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                                            النص الأصلي (قبل إعادة الصياغة)
+                                                        </Typography>
+                                                        <Tooltip title="نسخ النص الأصلي بالكامل">
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() => handleCopy(rewordCompareOriginal)}
+                                                                aria-label="Copy original section text"
+                                                            >
+                                                                <ContentCopyIcon fontSize="small" />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    </Box>
+                                                    <TextField
+                                                        fullWidth
+                                                        multiline
+                                                        minRows={8}
+                                                        value={rewordCompareOriginal}
+                                                        InputProps={{ readOnly: true }}
+                                                        variant="outlined"
+                                                        size="small"
+                                                        sx={{
+                                                            '& .MuiInputBase-root': {
+                                                                bgcolor: '#eef1f5',
+                                                                alignItems: 'flex-start'
+                                                            },
+                                                            '& .MuiOutlinedInput-notchedOutline': {
+                                                                borderColor: '#b8c2ce'
+                                                            },
+                                                            '& .MuiInputBase-inputMultiline': {
+                                                                fontFamily: '"Roboto", "Noto Naskh Arabic", "Segoe UI", sans-serif',
+                                                                fontSize: '1.03rem',
+                                                                lineHeight: 1.9,
+                                                                cursor: 'text'
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        يمكنك تحديد أي جزء بالماوس ثم نسخه (Ctrl/Cmd+C)، أو استخدام زر النسخ أعلاه.
+                                                    </Typography>
+                                                </Box>
+                                            )}
+                                            <Box
+                                                sx={{
+                                                    flex: { md: rewordCompareOriginal != null ? '1 1 0' : '1 1 auto' },
+                                                    minWidth: 0,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    gap: 0.75
+                                                }}
+                                            >
+                                                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                                                    {rewordCompareOriginal != null
+                                                        ? 'المسودة — ما يُحفظ على GitHub (حرّر بحرية)'
+                                                        : 'تحرير القسم'}
+                                                </Typography>
+                                                <TextField
+                                                    fullWidth
+                                                    multiline
+                                                    minRows={8}
+                                                    value={editingMarkdown}
+                                                    onChange={(event) => setEditingMarkdown(event.target.value)}
+                                                    disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                    placeholder="نص القسم…"
+                                                    sx={{
+                                                        '& .MuiInputBase-root': {
+                                                            bgcolor: '#fff'
+                                                        },
+                                                        '& .MuiInputBase-inputMultiline': {
+                                                            fontFamily: '"Roboto", "Noto Naskh Arabic", "Segoe UI", sans-serif',
+                                                            fontSize: '1.03rem',
+                                                            lineHeight: 1.9
+                                                        }
+                                                    }}
+                                                />
+                                            </Box>
+                                        </Box>
                                         <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
                                             <Tooltip title="Save to GitHub">
                                                 <span>

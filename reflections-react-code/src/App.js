@@ -6,6 +6,7 @@ import {
   Container,
   Dialog,
   DialogContent,
+  Divider,
   IconButton,
   InputAdornment,
   Snackbar,
@@ -69,18 +70,35 @@ const getFileNameParts = (fileName = "") => {
   };
 };
 
+/**
+ * Splits file stem like "2-1 عنوان الصورة" → prefix "2-1", base "عنوان الصورة".
+ * Also handles "12 عنوان", "2-2-3 عنوان" (digits separated by hyphens), or no prefix.
+ */
 const splitNumericPrefix = (stem = "") => {
-  const match = stem.match(/^(\d+)\s*(.*)$/);
-  if (!match) {
-    return { number: 1, baseName: stem.trim() || FALLBACK_IMAGE_NAME };
+  const t = stem.trim();
+  if (!t) {
+    return { numericPrefix: "", baseName: FALLBACK_IMAGE_NAME };
   }
 
-  const parsedNumber = Number.parseInt(match[1], 10);
+  const match = t.match(/^((?:\d+)(?:-\d+)*)(?:\s+(.+))?$/);
+  if (!match) {
+    return { numericPrefix: "", baseName: t || FALLBACK_IMAGE_NAME };
+  }
+
+  const numericPrefix = match[1];
+  const rest = (match[2] || "").trim();
   return {
-    number: Number.isNaN(parsedNumber) ? 1 : parsedNumber,
-    baseName: (match[2] || "").trim() || FALLBACK_IMAGE_NAME,
+    numericPrefix,
+    baseName: rest || FALLBACK_IMAGE_NAME,
   };
 };
+
+/** Keep only digits and single hyphens for the prefix field (e.g. 2-1, 12-3). */
+const sanitizeImageNumericPrefixInput = (raw = "") =>
+  raw
+    .replace(/[^\d-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-+/, "");
 
 const extractSuggestedArabicName = (text = "") => {
   const match = text.match(/^\s*اسم\s+مقترح\s*:\s*(.+)$/im);
@@ -89,6 +107,7 @@ const extractSuggestedArabicName = (text = "") => {
   }
 
   return match[1]
+    .replace(/_/g, " ")
     .replace(/^['"\s]+|['"\s]+$/g, "")
     .replace(/[\\/:*?"<>|]/g, " ")
     .replace(/\s{2,}/g, " ")
@@ -101,6 +120,26 @@ const toEncodedGitHubContentsPath = (repoPath = "") =>
     .filter(Boolean)
     .map((segment) => encodeURIComponent(segment))
     .join("/");
+
+/** TextFields on dark modal (#0f0f23): readable labels, inputs, borders */
+const imageModalFieldSx = {
+  "& .MuiOutlinedInput-root": {
+    color: "#f0f4f8",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    "& fieldset": { borderColor: "rgba(255,255,255,0.38)" },
+    "&:hover fieldset": { borderColor: "rgba(0, 191, 166, 0.65)" },
+    "&.Mui-focused fieldset": { borderColor: "#00BFA6", borderWidth: "2px" },
+  },
+  "& .MuiInputLabel-root": {
+    color: "rgba(255,255,255,0.78)",
+  },
+  "& .MuiInputLabel-root.Mui-focused": {
+    color: "#7ee8d4",
+  },
+  "& .MuiFormHelperText-root": {
+    color: "rgba(255,255,255,0.55)",
+  },
+};
 
 function getCopyLimitFromQuery() {
   const query = window.location.search;
@@ -128,7 +167,7 @@ function App() {
   const [userQuestion, setUserQuestion] = useState("");
   const [askingQuestion, setAskingQuestion] = useState(false);
   const [imageBase64Data, setImageBase64Data] = useState(null);
-  const [imageNameNumber, setImageNameNumber] = useState(1);
+  const [imageNumericPrefix, setImageNumericPrefix] = useState("");
   const [editableImageName, setEditableImageName] = useState(FALLBACK_IMAGE_NAME);
   const [selectedImageExtension, setSelectedImageExtension] = useState(".png");
   const [renamingImage, setRenamingImage] = useState(false);
@@ -428,9 +467,9 @@ function App() {
     setSelectedImage(imageUrl);
     setSelectedImageName(imageName || "");
     const { extension, stem } = getFileNameParts(imageName || "");
-    const { number, baseName } = splitNumericPrefix(stem);
+    const { numericPrefix, baseName } = splitNumericPrefix(stem);
     setSelectedImageExtension(extension || ".png");
-    setImageNameNumber(number);
+    setImageNumericPrefix(numericPrefix);
     setEditableImageName(baseName);
     setOpen(true);
   };
@@ -443,7 +482,7 @@ function App() {
     setChatMessages([]);
     setUserQuestion("");
     setImageBase64Data(null);
-    setImageNameNumber(1);
+    setImageNumericPrefix("");
     setEditableImageName(FALLBACK_IMAGE_NAME);
     setSelectedImageExtension(".png");
   };
@@ -675,6 +714,13 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
       const updatedImageUrl = `${GITHUB}/${toEncodedGitHubContentsPath(targetRepoPath)}?v=${Date.now()}`;
       setSelectedImageName(targetName);
       setSelectedImage(updatedImageUrl);
+      {
+        const { extension: ext, stem } = getFileNameParts(targetName);
+        const { numericPrefix, baseName } = splitNumericPrefix(stem);
+        setSelectedImageExtension(ext || ".png");
+        setImageNumericPrefix(numericPrefix);
+        setEditableImageName(baseName);
+      }
       setImages((previous) =>
         previous.map((image) =>
           image.name === currentName
@@ -702,14 +748,17 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
     }
   };
 
-  const normalizedImageNumber = Number.isFinite(imageNameNumber) && imageNameNumber > 0
-    ? Math.floor(imageNameNumber)
-    : 1;
+  const normalizedNumericPrefix = sanitizeImageNumericPrefixInput(imageNumericPrefix).replace(
+    /-+$/,
+    ""
+  );
   const normalizedImageBaseName = (editableImageName || FALLBACK_IMAGE_NAME)
     .replace(/[\\/:*?"<>|]/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim() || FALLBACK_IMAGE_NAME;
-  const suggestedFullImageName = `${normalizedImageNumber} ${normalizedImageBaseName}${selectedImageExtension || ".png"}`;
+  const suggestedFullImageName = normalizedNumericPrefix
+    ? `${normalizedNumericPrefix} ${normalizedImageBaseName}${selectedImageExtension || ".png"}`
+    : `${normalizedImageBaseName}${selectedImageExtension || ".png"}`;
 
   return (
     <>
@@ -792,50 +841,154 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                   }}
                 />
               )}
-              {/* Image name and action area */}
+              {/* Rename (always) + Describe / follow-up */}
               <Box
                 sx={{
                   width: "100%",
                   mt: 1.5,
                   px: 1,
+                  pb: 1,
                 }}
               >
                 <Typography
-                  variant="body2"
+                  variant="subtitle2"
                   sx={{
-                    color: "#aaa",
-                    fontFamily: "Roboto, sans-serif",
-                    fontSize: "0.85rem",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    color: "#e8ecf0",
+                    fontWeight: 600,
+                    mb: 0.75,
+                    letterSpacing: "0.02em",
+                  }}
+                >
+                  تسمية الملف على GitHub
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    color: "rgba(255,255,255,0.65)",
+                    mb: 1.25,
+                  }}
+                >
+                  الحالي:{" "}
+                  <Box component="span" sx={{ color: "#b8f5e8", wordBreak: "break-all" }}>
+                    {selectedImageName || "—"}
+                  </Box>
+                </Typography>
+
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", sm: "minmax(112px, 168px) 1fr" },
+                    gap: 1.5,
                     mb: 1,
                   }}
                 >
-                  {selectedImageName}
+                  <TextField
+                    type="text"
+                    label="التسلسل الرقمي"
+                    placeholder="مثل 12 أو 2-1"
+                    size="small"
+                    value={imageNumericPrefix}
+                    onChange={(event) => {
+                      setImageNumericPrefix(sanitizeImageNumericPrefixInput(event.target.value));
+                    }}
+                    inputProps={{ inputMode: "text", "aria-label": "Numeric sequence prefix" }}
+                    helperText="أرقام وشرطة فقط"
+                    FormHelperTextProps={{ sx: { color: "rgba(255,255,255,0.5)", mx: 0 } }}
+                    sx={imageModalFieldSx}
+                  />
+                  <TextField
+                    label="الاسم (نص)"
+                    size="small"
+                    value={editableImageName}
+                    onChange={(event) => setEditableImageName(event.target.value)}
+                    placeholder={FALLBACK_IMAGE_NAME}
+                    sx={imageModalFieldSx}
+                  />
+                </Box>
+
+                <Typography
+                  variant="body2"
+                  sx={{
+                    display: "block",
+                    color: "#d4dde6",
+                    mb: 1,
+                    fontFamily: "ui-monospace, monospace",
+                    fontSize: "0.8rem",
+                    bgcolor: "rgba(0,0,0,0.35)",
+                    px: 1.25,
+                    py: 0.75,
+                    borderRadius: 1,
+                    border: "1px solid rgba(255,255,255,0.15)",
+                  }}
+                >
+                  الاسم النهائي: {suggestedFullImageName}
                 </Typography>
+
+                <Button
+                  onClick={handleRenameImageOnGithub}
+                  variant="contained"
+                  size="medium"
+                  fullWidth
+                  startIcon={
+                    renamingImage ? (
+                      <CircularProgress size={18} color="inherit" />
+                    ) : (
+                      <DriveFileRenameOutlineIcon />
+                    )
+                  }
+                  disabled={renamingImage || !hasRepoWriteAccess || !githubToken}
+                  sx={{
+                    mb: 0.5,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    bgcolor: "#0d7a66",
+                    color: "#fff",
+                    "&:hover": { bgcolor: "#0a6353" },
+                    "&.Mui-disabled": {
+                      color: "rgba(255,255,255,0.45)",
+                      bgcolor: "rgba(255,255,255,0.12)",
+                    },
+                  }}
+                >
+                  {renamingImage ? "جاري الحفظ…" : "حفظ التسمية على GitHub"}
+                </Button>
+                {(!githubToken || !hasRepoWriteAccess) && (
+                  <Typography variant="caption" sx={{ display: "block", color: "rgba(255,200,120,0.95)", mt: 0.5 }}>
+                    سجّل الدخول بصلاحية الكتابة على المستودع لتفعيل الحفظ.
+                  </Typography>
+                )}
+
+                <Divider sx={{ my: 2, borderColor: "rgba(255,255,255,0.14)" }} />
+
+                <Typography
+                  variant="caption"
+                  sx={{ color: "rgba(255,255,255,0.6)", display: "block", mb: 1 }}
+                >
+                  الوصف بالذكاء الاصطناعي يملأ حقل «الاسم (نص)» فقط عند توفر «اسم مقترح» في الرد.
+                </Typography>
+
                 {!imageDescription ? (
-                  // Initial Describe button
                   describingImage ? (
-                    <CircularProgress size={28} sx={{ color: "#aaa" }} />
+                    <Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
+                      <CircularProgress size={28} sx={{ color: "#7ee8d4" }} />
+                    </Box>
                   ) : (
                     <Button
                       onClick={handleDescribeImage}
                       variant="outlined"
                       size="small"
                       startIcon={<AutoAwesomeIcon />}
+                      fullWidth
                       sx={{
-                        borderRadius: 5,
-                        px: 2,
-                        py: 0.5,
-                        fontSize: "0.8rem",
+                        borderRadius: 2,
+                        py: 0.75,
                         textTransform: "none",
-                        fontFamily: "Roboto, sans-serif",
-                        color: "#aaa",
-                        borderColor: "#444",
+                        color: "#e0e0e0",
+                        borderColor: "rgba(255,255,255,0.35)",
                         "&:hover": {
-                          borderColor: "#888",
-                          backgroundColor: "rgba(255,255,255,0.05)",
+                          borderColor: "#00BFA6",
+                          backgroundColor: "rgba(0,191,166,0.12)",
                         },
                       }}
                     >
@@ -843,103 +996,40 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                     </Button>
                   )
                 ) : (
-                  <>
-                    <Box sx={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 1, mb: 1 }}>
-                    <TextField
-                      type="number"
-                      label="رقم"
-                      size="small"
-                      value={normalizedImageNumber}
-                      onChange={(event) => {
-                        const parsed = Number.parseInt(event.target.value || "1", 10);
-                        setImageNameNumber(Number.isNaN(parsed) ? 1 : Math.max(1, parsed));
-                      }}
-                      inputProps={{ min: 1 }}
-                      sx={{
-                        "& .MuiInputBase-input": { fontFamily: '"Roboto", "Segoe UI", sans-serif' }
-                      }}
-                    />
-                    <TextField
-                      label="اسم الصورة المقترح"
-                      size="small"
-                      value={editableImageName}
-                      onChange={(event) => setEditableImageName(event.target.value)}
-                      sx={{
-                        "& .MuiInputBase-input": { fontFamily: '"Roboto", "Segoe UI", sans-serif' }
-                      }}
-                    />
-                    </Box>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        display: "block",
-                        color: "#b6bdc7",
-                        mb: 1,
-                        fontFamily: '"Roboto", "Segoe UI", sans-serif'
-                      }}
-                    >
-                      {`الاسم النهائي: ${suggestedFullImageName}`}
-                    </Typography>
-                    <Button
-                      onClick={handleRenameImageOnGithub}
-                      variant="outlined"
-                      size="small"
-                      startIcon={renamingImage ? <CircularProgress size={14} /> : <DriveFileRenameOutlineIcon />}
-                      disabled={renamingImage || !hasRepoWriteAccess || !githubToken}
-                      sx={{
-                        mb: 1,
-                        textTransform: "none",
-                        fontFamily: '"Roboto", "Segoe UI", sans-serif',
-                        color: "#9ec5b3",
-                        borderColor: "rgba(158,197,179,0.5)",
-                      }}
-                    >
-                      {renamingImage ? "Renaming..." : "Rename on GitHub"}
-                    </Button>
-
-                    <TextField
-                      value={userQuestion}
-                      onChange={(e) => setUserQuestion(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          handleAskQuestion();
-                        }
-                      }}
-                      placeholder="اسأل عن الصورة..."
-                      variant="outlined"
-                      size="small"
-                      fullWidth
-                      disabled={askingQuestion}
-                      InputProps={{
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            {askingQuestion ? (
-                              <CircularProgress size={22} sx={{ color: "#aaa" }} />
-                            ) : (
-                              <IconButton
-                                onClick={handleAskQuestion}
-                                disabled={!userQuestion.trim()}
-                                size="small"
-                                sx={{ color: "#aaa" }}
-                              >
-                                <SendIcon fontSize="small" />
-                              </IconButton>
-                            )}
-                          </InputAdornment>
-                        ),
-                        sx: {
-                          fontFamily: '"Roboto", "Segoe UI", sans-serif',
-                          fontSize: "0.9rem",
-                          color: "#e0e0e0",
-                          borderRadius: 3,
-                          "& fieldset": { borderColor: "#444" },
-                          "&:hover fieldset": { borderColor: "#888" },
-                          "&.Mui-focused fieldset": { borderColor: "#6C63FF" },
-                        },
-                      }}
-                    />
-                  </>
+                  <TextField
+                    value={userQuestion}
+                    onChange={(e) => setUserQuestion(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleAskQuestion();
+                      }
+                    }}
+                    placeholder="اسأل عن الصورة..."
+                    variant="outlined"
+                    size="small"
+                    fullWidth
+                    disabled={askingQuestion}
+                    sx={imageModalFieldSx}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          {askingQuestion ? (
+                            <CircularProgress size={22} sx={{ color: "#7ee8d4" }} />
+                          ) : (
+                            <IconButton
+                              onClick={handleAskQuestion}
+                              disabled={!userQuestion.trim()}
+                              size="small"
+                              sx={{ color: "#7ee8d4" }}
+                            >
+                              <SendIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
                 )}
               </Box>
             </Box>
