@@ -36,7 +36,8 @@ const Header = ({
   onTogglePreview,
   githubLogin,
   oauthConfigured,
-  canEditSections,
+  isGithubSignedIn,
+  canEditReflections,
   authLoading,
   authChecking,
   onSignInGithub,
@@ -219,7 +220,7 @@ const Header = ({
               />
             )}
             {authChecking && <Typography variant="caption">Checking access...</Typography>}
-            {!canEditSections ? (
+            {!isGithubSignedIn ? (
               <Tooltip
                 title={
                   !oauthConfigured
@@ -249,7 +250,13 @@ const Header = ({
                 </span>
               </Tooltip>
             ) : (
-              <Tooltip title="Sign out">
+              <Tooltip
+                title={
+                  canEditReflections
+                    ? "Sign out"
+                    : "Sign out (signed in; editing and AI are limited to authorized accounts)"
+                }
+              >
                 <span>
                   <IconButton
                     color="inherit"

@@ -350,7 +350,7 @@ const FolderListTableCell = ({ children, ...props }) => {
 };
 
 
-const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWriteAccess }) => {
+const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditReflections }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
     const [editingSectionIndex, setEditingSectionIndex] = useState(null);
@@ -479,10 +479,10 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
     };
 
     const handleSaveEdit = async (idx) => {
-        if (!hasRepoWriteAccess || !githubToken) {
+        if (!canEditReflections || !githubToken) {
             setSnackbarState({
                 open: true,
-                message: 'GitHub write access is required to save edits.',
+                message: 'Saving requires an authorized editor (push access and allowlisted GitHub user or org member).',
                 severity: 'warning'
             });
             return;
@@ -570,6 +570,15 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
     };
 
     const handleRewordSection = async (idx) => {
+        if (!canEditReflections || !githubToken) {
+            setSnackbarState({
+                open: true,
+                message: 'Rewording requires an authorized editor (push access and allowlisted GitHub user or org member).',
+                severity: 'warning'
+            });
+            return;
+        }
+
         const sourceMarkdown = editingSectionIndex === idx
             ? editingMarkdown
             : sections[idx]?.markdown || '';
@@ -688,10 +697,10 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
     };
 
     const handleGenerateSectionImage = async (idx) => {
-        if (!hasRepoWriteAccess || !githubToken) {
+        if (!canEditReflections || !githubToken) {
             setSnackbarState({
                 open: true,
-                message: 'GitHub write access is required to generate and save an image.',
+                message: 'Image generation requires an authorized editor (push access and allowlisted GitHub user or org member).',
                 severity: 'warning'
             });
             return;
@@ -798,7 +807,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, hasRepoWrite
         }
     };
 
-    const canEditSections = hasRepoWriteAccess && Boolean(githubToken);
+    const canEditSections = Boolean(canEditReflections && githubToken);
 
     return (
         <div>

@@ -28,6 +28,7 @@ import {
   signInWithGithub,
   signOutGithub,
 } from "./utils/github-auth";
+import { checkReflectionsEditorIdentity } from "./utils/reflections-editor-access";
 
 const DEFAULT_COPY_LIMIT = 3500;
 const GITHUB_API_BASE = "https://api.github.com";
@@ -178,7 +179,8 @@ function App() {
     () => localStorage.getItem(GITHUB_LOGIN_STORAGE_KEY) || ""
   );
   const [oauthConfigured] = useState(() => isGithubAuthConfigured());
-  const [hasRepoWriteAccess, setHasRepoWriteAccess] = useState(false);
+  /** Push on repo + allowlisted user or org member (hajonsoft / alialiayman) */
+  const [canEditReflections, setCanEditReflections] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(false);
 
@@ -227,7 +229,7 @@ function App() {
 
   useEffect(() => {
     if (!githubToken) {
-      setHasRepoWriteAccess(false);
+      setCanEditReflections(false);
       setAuthChecking(false);
       return;
     }
@@ -248,8 +250,31 @@ function App() {
         );
 
         const canPush = Boolean(response.data?.permissions?.push);
+        let mayEdit = false;
+
+        if (canPush) {
+          const identity = await checkReflectionsEditorIdentity(githubToken);
+          mayEdit = identity.eligible;
+          if (!cancelled && !identity.eligible) {
+            if (identity.reason === "read_org_scope_required") {
+              setCopyToast({
+                open: true,
+                message:
+                  "Sign out and sign in again with GitHub so the app can verify organization membership (read:org).",
+                severity: "warning",
+              });
+            } else if (identity.login) {
+              setCopyToast({
+                open: true,
+                message: `Signed in as @${identity.login}. Editing and AI features are limited to the repository owner, @hajonsoft, and members of the hajonsoft or alialiayman organizations.`,
+                severity: "warning",
+              });
+            }
+          }
+        }
+
         if (!cancelled) {
-          setHasRepoWriteAccess(canPush);
+          setCanEditReflections(canPush && mayEdit);
         }
 
         if (!canPush && !cancelled) {
@@ -262,7 +287,7 @@ function App() {
         }
       } catch {
         if (!cancelled) {
-          setHasRepoWriteAccess(false);
+          setCanEditReflections(false);
           localStorage.removeItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY);
           setGithubToken("");
           setCopyToast({
@@ -454,7 +479,7 @@ function App() {
     localStorage.removeItem(GITHUB_LOGIN_STORAGE_KEY);
     setGithubToken("");
     setGithubLogin("");
-    setHasRepoWriteAccess(false);
+    setCanEditReflections(false);
     setCopyToast({
       open: true,
       message: "Signed out from GitHub editor mode.",
@@ -489,6 +514,15 @@ function App() {
 
   const handleDescribeImage = async () => {
     if (!selectedImage) return;
+    if (!canEditReflections || !githubToken) {
+      setCopyToast({
+        open: true,
+        message:
+          "Describe and AI image features are only available to authorized editors (repository access + allowlisted account or org).",
+        severity: "warning",
+      });
+      return;
+    }
     setDescribingImage(true);
     setImageDescription("");
     try {
@@ -576,6 +610,15 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
 
   const handleAskQuestion = async () => {
     if (!userQuestion.trim() || !imageBase64Data) return;
+    if (!canEditReflections || !githubToken) {
+      setCopyToast({
+        open: true,
+        message:
+          "Follow-up questions require an authorized editor sign-in (repository access + allowlisted account or org).",
+        severity: "warning",
+      });
+      return;
+    }
     const question = userQuestion.trim();
     setUserQuestion("");
     setAskingQuestion(true);
@@ -626,10 +669,11 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
   };
 
   const handleRenameImageOnGithub = async () => {
-    if (!hasRepoWriteAccess || !githubToken) {
+    if (!canEditReflections || !githubToken) {
       setCopyToast({
         open: true,
-        message: "GitHub write access is required to rename images.",
+        message:
+          "Renaming images requires an authorized editor (push access plus allowlisted GitHub user or hajonsoft / alialiayman org member).",
         severity: "warning",
       });
       return;
@@ -775,7 +819,8 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
         onTogglePreview={() => setPreviewMode((current) => !current)}
         githubLogin={githubLogin}
         oauthConfigured={oauthConfigured}
-        canEditSections={hasRepoWriteAccess && Boolean(githubToken)}
+        isGithubSignedIn={Boolean(githubToken)}
+        canEditReflections={canEditReflections}
         authLoading={authLoading}
         authChecking={authChecking}
         onSignInGithub={handleSignInGithub}
@@ -787,7 +832,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
           previewMode={previewMode}
           images={images}
           githubToken={githubToken}
-          hasRepoWriteAccess={hasRepoWriteAccess}
+          canEditReflections={canEditReflections}
         />
       </Container>
 
@@ -937,7 +982,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                       <DriveFileRenameOutlineIcon />
                     )
                   }
-                  disabled={renamingImage || !hasRepoWriteAccess || !githubToken}
+                  disabled={renamingImage || !canEditReflections || !githubToken}
                   sx={{
                     mb: 0.5,
                     textTransform: "none",
@@ -953,9 +998,11 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                 >
                   {renamingImage ? "جاري الحفظ…" : "حفظ التسمية على GitHub"}
                 </Button>
-                {(!githubToken || !hasRepoWriteAccess) && (
+                {(!githubToken || !canEditReflections) && (
                   <Typography variant="caption" sx={{ display: "block", color: "rgba(255,200,120,0.95)", mt: 0.5 }}>
-                    سجّل الدخول بصلاحية الكتابة على المستودع لتفعيل الحفظ.
+                    {!githubToken
+                      ? "سجّل الدخول عبر GitHub لتفعيل الحفظ على المستودع."
+                      : "الحفظ والذكاء الاصطناعي للصور للمحرّرين المصرّح لهم فقط (صلاحية الدفع + حساب معتمد أو عضوية منظمة hajonsoft أو alialiayman). قد تحتاج لتسجيل الخروج ثم الدخول مرة أخرى بعد تحديث الصلاحيات."}
                   </Typography>
                 )}
 
@@ -973,7 +1020,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                     <Box sx={{ display: "flex", justifyContent: "center", py: 1 }}>
                       <CircularProgress size={28} sx={{ color: "#7ee8d4" }} />
                     </Box>
-                  ) : (
+                  ) : canEditReflections && githubToken ? (
                     <Button
                       onClick={handleDescribeImage}
                       variant="outlined"
@@ -994,6 +1041,20 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                     >
                       Describe
                     </Button>
+                  ) : (
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "block",
+                        color: "rgba(255,200,160,0.95)",
+                        lineHeight: 1.5,
+                        px: 0.5,
+                      }}
+                    >
+                      {!githubToken
+                        ? "سجّل الدخول عبر GitHub لاستخدام وصف الصورة بالذكاء الاصطناعي."
+                        : "وصف الصورة بالذكاء الاصطناعي متاح فقط للمحرّرين المصرّح لهم على مستودع reflections (صلاحية الدفع + حساب معتمد أو عضوية منظمة hajonsoft أو alialiayman)."}
+                    </Typography>
                   )
                 ) : (
                   <TextField
@@ -1009,7 +1070,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                     variant="outlined"
                     size="small"
                     fullWidth
-                    disabled={askingQuestion}
+                    disabled={askingQuestion || !canEditReflections || !githubToken}
                     sx={imageModalFieldSx}
                     InputProps={{
                       endAdornment: (
@@ -1019,7 +1080,9 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
                           ) : (
                             <IconButton
                               onClick={handleAskQuestion}
-                              disabled={!userQuestion.trim()}
+                              disabled={
+                                !userQuestion.trim() || !canEditReflections || !githubToken
+                              }
                               size="small"
                               sx={{ color: "#7ee8d4" }}
                             >

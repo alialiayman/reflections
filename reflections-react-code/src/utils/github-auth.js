@@ -24,6 +24,7 @@ if (hasFirebaseConfig) {
   auth = getAuth(app);
   provider = new GithubAuthProvider();
   provider.addScope('repo');
+  provider.addScope('read:org');
 }
 
 export const isGithubAuthConfigured = () => hasFirebaseConfig;

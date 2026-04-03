@@ -17,7 +17,7 @@ const getNormalizedPathSegments = (pathname) =>
     .map((segment) => safelyDecodeURIComponent(segment).trim())
     .filter(Boolean);
 
-export default function Main({ previewMode, images, githubToken, hasRepoWriteAccess }) {
+export default function Main({ previewMode, images, githubToken, canEditReflections }) {
   const path = window.location.pathname;
   const pathSegments = getNormalizedPathSegments(path);
   const encodedPath = pathSegments.map((segment) => encodeURIComponent(segment)).join("/");
@@ -34,7 +34,7 @@ export default function Main({ previewMode, images, githubToken, hasRepoWriteAcc
         <DisplayReadme
           path={canonicalPath}
           githubToken={githubToken}
-          hasRepoWriteAccess={hasRepoWriteAccess}
+          canEditReflections={canEditReflections}
         />
       )}
       <Typography
