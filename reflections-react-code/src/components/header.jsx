@@ -4,6 +4,8 @@ import HomeIcon from "@mui/icons-material/Home";
 import LoginIcon from "@mui/icons-material/Login";
 import LogoutIcon from "@mui/icons-material/Logout";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
+import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
+import StopIcon from "@mui/icons-material/Stop";
 import TranslateIcon from "@mui/icons-material/Translate";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
@@ -13,7 +15,10 @@ import {
   Box,
   CircularProgress,
   Chip,
+  FormControl,
   IconButton,
+  MenuItem,
+  Select,
   Snackbar,
   Toolbar,
   Tooltip,
@@ -22,6 +27,8 @@ import {
   useTheme,
 } from "@mui/material";
 import { useState } from "react";
+import { OPENAI_TTS_VOICES } from "../constants/tts";
+import { useTts } from "../context/TtsContext";
 import { exportFolderToEpub } from "../utils/epub-export";
 
 const Header = ({
@@ -47,6 +54,14 @@ const Header = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const path = window.location.pathname;
+  const {
+    voice,
+    setVoice,
+    toggleGlobalSpeak,
+    isSpeaking,
+    isGlobalArticle,
+    ttsEnabled,
+  } = useTts();
   const [exportingEpub, setExportingEpub] = useState(false);
   const [epubToast, setEpubToast] = useState({
     open: false,
@@ -208,6 +223,71 @@ const Header = ({
                 </IconButton>
               </span>
             </Tooltip>
+            {ttsEnabled && !previewMode && (
+              <>
+                <FormControl
+                  size="small"
+                  sx={{
+                    minWidth: { xs: 86, sm: 100 },
+                    maxWidth: 120,
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "rgba(164, 180, 148, 0.45)",
+                    },
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "rgba(164, 180, 148, 0.75)",
+                    },
+                    "& .MuiSvgIcon-root": { color: "#d6dfcc" },
+                  }}
+                >
+                  <Select
+                    value={voice}
+                    onChange={(e) => setVoice(e.target.value)}
+                    displayEmpty
+                    inputProps={{ "aria-label": "OpenAI TTS voice" }}
+                    sx={{
+                      color: "#e8f0e8",
+                      fontSize: "0.75rem",
+                      height: 36,
+                      "& .MuiSelect-select": {
+                        py: 0.65,
+                        display: "flex",
+                        alignItems: "center",
+                      },
+                    }}
+                  >
+                    {OPENAI_TTS_VOICES.map((v) => (
+                      <MenuItem key={v.id} value={v.id} dense>
+                        {v.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Tooltip
+                  title={
+                    isSpeaking && isGlobalArticle
+                      ? "Stop reading the article"
+                      : "Read entire article (section by section)"
+                  }
+                >
+                  <IconButton
+                    color="inherit"
+                    onClick={toggleGlobalSpeak}
+                    aria-label={
+                      isSpeaking && isGlobalArticle
+                        ? "Stop speech"
+                        : "Read full article aloud"
+                    }
+                    sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                  >
+                    {isSpeaking && isGlobalArticle ? (
+                      <StopIcon />
+                    ) : (
+                      <RecordVoiceOverIcon />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
           </Box>
 
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>

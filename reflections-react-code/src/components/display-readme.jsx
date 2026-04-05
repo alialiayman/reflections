@@ -4,6 +4,8 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ImageIcon from '@mui/icons-material/Image';
 import SaveIcon from '@mui/icons-material/Save';
+import StopIcon from '@mui/icons-material/Stop';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Snackbar from '@mui/material/Snackbar';
@@ -17,6 +19,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GITHUB, getVisionKey } from '../constants';
 import { REWORD_SECTION_SYSTEM_PROMPT } from '../prompts/reword-section-system-prompt';
+import { useTts } from '../context/TtsContext';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -350,7 +353,7 @@ const FolderListTableCell = ({ children, ...props }) => {
 };
 
 
-const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditReflections }) => {
+const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditReflections, sectionMarkdownsRef }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
     const [editingSectionIndex, setEditingSectionIndex] = useState(null);
@@ -366,6 +369,13 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
         severity: 'success'
     });
 
+    const tts = useTts();
+
+    useEffect(() => {
+        if (sectionMarkdownsRef) {
+            sectionMarkdownsRef.current = sections.map((s) => s.markdown);
+        }
+    }, [sections, sectionMarkdownsRef]);
 
     useEffect(() => {
         if (path && filename) {
@@ -809,6 +819,19 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
 
     const canEditSections = Boolean(canEditReflections && githubToken);
 
+    const toggleSectionSpeak = (idx, markdown) => {
+        if (!canEditSections) {
+            return;
+        }
+        if (tts.isSpeaking && tts.activeSectionIndex === idx) {
+            tts.stop();
+            return;
+        }
+        void tts.speakSection(idx, markdown);
+    };
+
+    const sectionToolsPaddingLeft = canEditSections ? '6.25rem' : '4.25rem';
+
     return (
         <div>
             {error ? (
@@ -826,7 +849,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                     position: 'relative'
                                 }}
                             >
-                                <div style={{ position: 'absolute', top: 0, left: 0, display: 'flex', gap: '0.25rem' }}>
+                                <div style={{ position: 'absolute', top: 0, left: 0, display: 'flex', gap: '0.25rem', flexWrap: 'wrap', maxWidth: '5.5rem' }}>
                                     <IconButton
                                         size="small"
                                         onClick={() => handleCopy(section.markdown)}
@@ -835,19 +858,36 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                         <ContentCopyIcon fontSize="small" />
                                     </IconButton>
                                     {canEditSections && (
-                                        <IconButton
-                                            size="small"
-                                            onClick={() => handleStartEdit(idx)}
-                                            title="Edit section"
-                                            disabled={savingEdit}
-                                        >
-                                            <EditIcon fontSize="small" />
-                                        </IconButton>
+                                        <>
+                                            <Tooltip title={tts.isSpeaking && tts.activeSectionIndex === idx ? 'إيقاف القراءة' : 'قراءة القسم (صوت OpenAI)'}>
+                                                <span>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => toggleSectionSpeak(idx, editingSectionIndex === idx ? editingMarkdown : section.markdown)}
+                                                        aria-label={tts.isSpeaking && tts.activeSectionIndex === idx ? 'Stop section speech' : 'Speak section'}
+                                                    >
+                                                        {tts.isSpeaking && tts.activeSectionIndex === idx ? (
+                                                            <StopIcon fontSize="small" />
+                                                        ) : (
+                                                            <VolumeUpIcon fontSize="small" />
+                                                        )}
+                                                    </IconButton>
+                                                </span>
+                                            </Tooltip>
+                                            <IconButton
+                                                size="small"
+                                                onClick={() => handleStartEdit(idx)}
+                                                title="Edit section"
+                                                disabled={savingEdit}
+                                            >
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        </>
                                     )}
                                 </div>
 
                                 {editingSectionIndex === idx ? (
-                                    <div className="markdown-content" style={{ paddingLeft: '4.25rem' }}>
+                                    <div className="markdown-content" style={{ paddingLeft: sectionToolsPaddingLeft }}>
                                         <Box
                                             sx={{
                                                 display: 'flex',
@@ -1006,7 +1046,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                         </Box>
                                     </div>
                                 ) : (
-                                    <div className="markdown-content" style={{ paddingLeft: '4.25rem' }}>
+                                    <div className="markdown-content" style={{ paddingLeft: sectionToolsPaddingLeft }}>
                                         <Markdown
                                             remarkPlugins={[remarkGfm]}
                                             components={{

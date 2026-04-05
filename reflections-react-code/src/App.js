@@ -17,7 +17,7 @@ import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import SendIcon from "@mui/icons-material/Send";
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
@@ -29,6 +29,7 @@ import {
   signOutGithub,
 } from "./utils/github-auth";
 import { checkReflectionsEditorIdentity } from "./utils/reflections-editor-access";
+import { TtsProvider } from "./context/TtsContext";
 
 const DEFAULT_COPY_LIMIT = 3500;
 const GITHUB_API_BASE = "https://api.github.com";
@@ -152,6 +153,7 @@ const COPY_LIMIT = getCopyLimitFromQuery();
 const REFERENCE_LINK = "\nhttps://a-reflections.web.app";
 
 function App() {
+  const readmeSectionMarkdownsRef = useRef([]);
   const [loadingChunks, setLoadingChunks] = useState(true);
   const [copied, setCopied] = useState(false);
   const [copyIndex, setCopyIndex] = useState(0);
@@ -805,6 +807,11 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
     : `${normalizedImageBaseName}${selectedImageExtension || ".png"}`;
 
   return (
+    <TtsProvider
+      getApiKey={getVisionKey}
+      enabled={canEditReflections}
+      sectionMarkdownsRef={readmeSectionMarkdownsRef}
+    >
     <>
       <Header
         id="web-header"
@@ -833,6 +840,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
           images={images}
           githubToken={githubToken}
           canEditReflections={canEditReflections}
+          sectionMarkdownsRef={readmeSectionMarkdownsRef}
         />
       </Container>
 
@@ -1163,6 +1171,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
         </Alert>
       </Snackbar>
     </>
+    </TtsProvider>
   );
 }
 
