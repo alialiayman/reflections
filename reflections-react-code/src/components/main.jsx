@@ -24,6 +24,7 @@ export default function Main({
   githubToken,
   canEditReflections,
   sectionMarkdownsRef,
+  openImageModal,
 }) {
   const path = window.location.pathname;
   const pathSegments = getNormalizedPathSegments(path);
@@ -49,6 +50,7 @@ export default function Main({
           githubToken={githubToken}
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={sectionMarkdownsRef}
+          openImageModal={openImageModal}
         />
       )}
       <Typography

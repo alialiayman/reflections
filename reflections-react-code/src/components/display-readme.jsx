@@ -355,7 +355,7 @@ const FolderListTableCell = ({ children, ...props }) => {
 };
 
 
-const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditReflections, sectionMarkdownsRef }) => {
+const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditReflections, sectionMarkdownsRef, openImageModal }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
     const [editingSectionIndex, setEditingSectionIndex] = useState(null);
@@ -826,6 +826,11 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                 }
             );
 
+            const generatedPreviewUrl = `${GITHUB}/${encodedImagePath}?v=${Date.now()}`;
+            if (typeof openImageModal === 'function') {
+                openImageModal(generatedPreviewUrl, generatedFileName);
+            }
+
             setSnackbarState({
                 open: true,
                 message: `Image generated and saved: ${generatedFileName}`,
@@ -924,11 +929,19 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                             )}
                                             <IconButton
                                                 size="small"
-                                                onClick={() => handleStartEdit(idx)}
-                                                title="Edit section"
+                                                onClick={() =>
+                                                    editingSectionIndex === idx
+                                                        ? handleCancelEdit()
+                                                        : handleStartEdit(idx)
+                                                }
+                                                title={editingSectionIndex === idx ? 'Cancel editing' : 'Edit section'}
                                                 disabled={savingEdit}
                                             >
-                                                <EditIcon fontSize="small" />
+                                                {editingSectionIndex === idx ? (
+                                                    <CancelIcon fontSize="small" />
+                                                ) : (
+                                                    <EditIcon fontSize="small" />
+                                                )}
                                             </IconButton>
                                         </>
                                     )}
@@ -955,17 +968,6 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                                             disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
                                                         >
                                                             <SaveIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </span>
-                                                </Tooltip>
-                                                <Tooltip title="Cancel editing">
-                                                    <span>
-                                                        <IconButton
-                                                            color="default"
-                                                            onClick={handleCancelEdit}
-                                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
-                                                        >
-                                                            <CancelIcon fontSize="small" />
                                                         </IconButton>
                                                     </span>
                                                 </Tooltip>

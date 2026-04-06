@@ -841,6 +841,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
           githubToken={githubToken}
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={readmeSectionMarkdownsRef}
+          openImageModal={handleClickOpen}
         />
       </Container>
 
