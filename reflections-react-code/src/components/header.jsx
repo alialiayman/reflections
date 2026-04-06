@@ -1,3 +1,4 @@
+import AutoStoriesIcon from "@mui/icons-material/AutoStories";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import GitHubIcon from "@mui/icons-material/GitHub";
@@ -51,6 +52,7 @@ const Header = ({
   onSignInGithub,
   onSignOutGithub,
   onDownloadReadmeMarkdown,
+  onOpenQuranResearch,
   ...props
 }) => {
   const theme = useTheme();
@@ -171,6 +173,18 @@ const Header = ({
                 <GitHubIcon />
               </IconButton>
             </Tooltip>
+            {isGithubSignedIn && typeof onOpenQuranResearch === "function" && (
+              <Tooltip title="Quran research (save notes in this folder)">
+                <IconButton
+                  color="inherit"
+                  onClick={onOpenQuranResearch}
+                  aria-label="Open Quran research tool"
+                  sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                >
+                  <AutoStoriesIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             {!loading && (
               <Tooltip
                 title={

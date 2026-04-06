@@ -21,6 +21,7 @@ import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
+import QuranResearchDialog from "./components/QuranResearchDialog";
 import { GITHUB, getVisionKey } from "./constants";
 import {
   isGithubAuthConfigured,
@@ -263,6 +264,7 @@ function App() {
     message: "",
     severity: "info",
   });
+  const [quranResearchOpen, setQuranResearchOpen] = useState(false);
   const path = window.location.pathname;
   const normalizedPathSegments = getNormalizedPathSegments(path);
   const apiPath = normalizedPathSegments
@@ -946,6 +948,18 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
         onSignInGithub={handleSignInGithub}
         onSignOutGithub={handleSignOutGithub}
         onDownloadReadmeMarkdown={handleDownloadFullReadmeMarkdown}
+        onOpenQuranResearch={() => setQuranResearchOpen(true)}
+      />
+      <QuranResearchDialog
+        open={quranResearchOpen}
+        onClose={() => setQuranResearchOpen(false)}
+        githubToken={githubToken}
+        canEditReflections={canEditReflections}
+        folderSegments={normalizedPathSegments}
+        getOpenAiKey={getVisionKey}
+        onNotify={({ message, severity }) =>
+          setCopyToast({ open: true, message, severity: severity || "info" })
+        }
       />
       <div id="print-header" style={{display: 'none'}}></div>
       <Container p={2} mt={2}>
