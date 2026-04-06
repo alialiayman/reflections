@@ -1,4 +1,5 @@
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import HomeIcon from "@mui/icons-material/Home";
 import LoginIcon from "@mui/icons-material/Login";
@@ -49,6 +50,7 @@ const Header = ({
   authChecking,
   onSignInGithub,
   onSignOutGithub,
+  onDownloadReadmeMarkdown,
   ...props
 }) => {
   const theme = useTheme();
@@ -198,6 +200,25 @@ const Header = ({
               >
                 <TranslateIcon />
               </IconButton>
+            </Tooltip>
+            <Tooltip
+              title={
+                previewMode
+                  ? "Switch to README view to download"
+                  : "Download full README as Markdown"
+              }
+            >
+              <span>
+                <IconButton
+                  color="inherit"
+                  onClick={onDownloadReadmeMarkdown}
+                  disabled={loading || previewMode || typeof onDownloadReadmeMarkdown !== "function"}
+                  aria-label="Download README markdown"
+                  sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                >
+                  <FileDownloadIcon />
+                </IconButton>
+              </span>
             </Tooltip>
             <Tooltip title={previewMode ? "Show README" : "EPUB-like preview"}>
               <IconButton

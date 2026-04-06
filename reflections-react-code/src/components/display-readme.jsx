@@ -45,6 +45,21 @@ const westernDigitsToEasternArabic = (text) => {
     );
 };
 
+const stripOptionalMarkdownFence = (text) => {
+    let t = (text || '').trim();
+    const fenceMatch = t.match(/^```(?:markdown|md)?\s*\n?([\s\S]*?)\n?```$/i);
+    if (fenceMatch) {
+        t = fenceMatch[1].trim();
+    }
+    return t;
+};
+
+/** Compare reword output vs source after fence strip, digit normalization, whitespace collapse */
+const normalizeRewordForCompare = (s) =>
+    westernDigitsToEasternArabic(stripOptionalMarkdownFence(s))
+        .replace(/\s+/g, ' ')
+        .trim();
+
 const getLeadingNumber = (name) => {
     const match = name.match(/^\s*(\d+)/);
     return match ? Number.parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
@@ -631,7 +646,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
 
         setRewordingSectionIndex(idx);
         try {
-            const userPayload = [
+            const baseUserLines = [
                 'فيما يلي نص المقال الكامل لملف README (للسياق فقط؛ لا تعِد كتابته كاملاً):',
                 '',
                 '---BEGIN_FULL_README---',
@@ -647,46 +662,80 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                 '---BEGIN_SECTION_TO_REWORD---',
                 sourceMarkdown,
                 '---END_SECTION_TO_REWORD---'
-            ].join('\n');
+            ];
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${getVisionKey()}`
-                },
-                body: JSON.stringify({
-                    model: 'gpt-4o',
-                    messages: [
-                        {
-                            role: 'system',
-                            content: REWORD_SECTION_SYSTEM_PROMPT
-                        },
-                        {
-                            role: 'user',
-                            content: userPayload
-                        }
-                    ],
-                    temperature: 0.7,
-                    max_tokens: 8000
-                })
-            });
+            let rewritten = '';
+            const sourceComparable = normalizeRewordForCompare(sourceMarkdown);
 
-            const data = await response.json();
-            const apiErr = data?.error?.message;
-            if (apiErr) {
-                throw new Error(apiErr);
+            for (let attempt = 0; attempt < 2; attempt++) {
+                const retryHint =
+                    attempt > 0
+                        ? [
+                              '',
+                              'تنبيه إلزامي: المخرجات السابقة كانت مطابقة تقريباً للقسم الأصلي. أعد كتابة القسم بصياغة وجمل مختلفة بوضوح (لا تنسخ الأصل)، مع الإبقاء على المعنى والمنهجية والمعطيات.'
+                          ].join('\n')
+                        : '';
+
+                const userPayload = [...baseUserLines, retryHint].join('\n');
+
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getVisionKey()}`
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o',
+                        messages: [
+                            {
+                                role: 'system',
+                                content: REWORD_SECTION_SYSTEM_PROMPT
+                            },
+                            {
+                                role: 'user',
+                                content: userPayload
+                            }
+                        ],
+                        temperature: attempt === 0 ? 0.88 : 1,
+                        max_tokens: 8000
+                    })
+                });
+
+                const raw = await response.text();
+                let data;
+                try {
+                    data = JSON.parse(raw);
+                } catch {
+                    throw new Error(`HTTP ${response.status}: ${raw.slice(0, 160)}`);
+                }
+
+                if (!response.ok) {
+                    throw new Error(
+                        data?.error?.message || `Request failed (HTTP ${response.status})`
+                    );
+                }
+
+                let candidate = data?.choices?.[0]?.message?.content?.trim();
+                if (!candidate) {
+                    throw new Error('No reworded content returned');
+                }
+                candidate = stripOptionalMarkdownFence(candidate);
+                candidate = westernDigitsToEasternArabic(candidate);
+
+                if (normalizeRewordForCompare(candidate) !== sourceComparable) {
+                    rewritten = candidate;
+                    break;
+                }
+                if (attempt === 1) {
+                    throw new Error(
+                        'The model still returned nearly identical text. Add a custom instruction or try again.'
+                    );
+                }
             }
-            let rewritten = data?.choices?.[0]?.message?.content?.trim();
+
             if (!rewritten) {
-                throw new Error('No reworded content returned');
+                throw new Error('No reworded content after attempts');
             }
-            const fenceMatch = rewritten.match(/^```(?:markdown|md)?\s*\n?([\s\S]*?)\n?```$/i);
-            if (fenceMatch) {
-                rewritten = fenceMatch[1].trim();
-            }
-
-            rewritten = westernDigitsToEasternArabic(rewritten);
 
             if (editingSectionIndex !== idx) {
                 setEditingSectionIndex(idx);

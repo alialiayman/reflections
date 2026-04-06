@@ -123,6 +123,68 @@ const toEncodedGitHubContentsPath = (repoPath = "") =>
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 
+/** Binary-safe base64 for GitHub Contents API (GitHub often omits `content` for images; use `download_url` fallback). */
+const arrayBufferToBase64 = (buffer) => {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const end = Math.min(i + chunkSize, bytes.length);
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, end));
+  }
+  return window.btoa(binary);
+};
+
+const normalizeGithubContentBase64 = (raw) =>
+  typeof raw === "string" ? raw.replace(/\s+/g, "") : "";
+
+/**
+ * @param {object} fileMetadata - GitHub GET /contents/{path} JSON
+ * @param {string} token - OAuth token (required for private raw fetch)
+ */
+const getGithubContentsFileBase64 = async (fileMetadata, token) => {
+  const fromField = normalizeGithubContentBase64(fileMetadata?.content);
+  if (fromField) {
+    return fromField;
+  }
+  const downloadUrl = fileMetadata?.download_url;
+  if (!downloadUrl || typeof downloadUrl !== "string") {
+    throw new Error(
+      "GitHub returned no inline content and no download URL (file may be too large for the API)."
+    );
+  }
+  const res = await fetch(downloadUrl, {
+    headers: token
+      ? {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github.v3.raw",
+        }
+      : {},
+  });
+  if (!res.ok) {
+    throw new Error(`Could not download file bytes (HTTP ${res.status}).`);
+  }
+  const buf = await res.arrayBuffer();
+  return arrayBufferToBase64(buf);
+};
+
+const formatGithubRequestError = (error) => {
+  const data = error?.response?.data;
+  if (typeof data?.message === "string") {
+    return data.message;
+  }
+  if (Array.isArray(data?.errors)) {
+    return data.errors
+      .map((e) => (typeof e?.message === "string" ? e.message : JSON.stringify(e)))
+      .filter(Boolean)
+      .join("; ");
+  }
+  if (error?.message) {
+    return error.message;
+  }
+  return "";
+};
+
 /** TextFields on dark modal (#0f0f23): readable labels, inputs, borders */
 const imageModalFieldSx = {
   "& .MuiOutlinedInput-root": {
@@ -725,16 +787,28 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
       });
 
       const fileSha = fileResponse.data?.sha;
-      const fileContent = fileResponse.data?.content;
-      if (!fileSha || !fileContent) {
-        throw new Error("Could not read existing image content");
+      if (!fileSha) {
+        throw new Error("Could not read existing file metadata (missing SHA).");
+      }
+
+      let base64Content;
+      try {
+        base64Content = await getGithubContentsFileBase64(fileResponse.data, githubToken);
+      } catch (readErr) {
+        throw new Error(
+          readErr instanceof Error ? readErr.message : "Could not read image bytes from GitHub."
+        );
+      }
+      if (!base64Content) {
+        throw new Error("Image content was empty after loading from GitHub.");
       }
 
       await axios.put(
         targetContentsUrl,
         {
           message: `Rename image: ${currentName} -> ${targetName}`,
-          content: String(fileContent).replace(/\n/g, ""),
+          content: base64Content,
+          encoding: "base64",
           branch: "main",
         },
         {
@@ -781,12 +855,10 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
         severity: "success",
       });
     } catch (error) {
-      const apiMessage = error?.response?.data?.message;
+      const detail = formatGithubRequestError(error);
       setCopyToast({
         open: true,
-        message: apiMessage
-          ? `Rename failed: ${apiMessage}`
-          : "Failed to rename image on GitHub.",
+        message: detail ? `Rename failed: ${detail}` : "Failed to rename image on GitHub.",
         severity: "error",
       });
     } finally {
@@ -805,6 +877,47 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
   const suggestedFullImageName = normalizedNumericPrefix
     ? `${normalizedNumericPrefix} ${normalizedImageBaseName}${selectedImageExtension || ".png"}`
     : `${normalizedImageBaseName}${selectedImageExtension || ".png"}`;
+
+  const handleDownloadFullReadmeMarkdown = () => {
+    if (previewMode) {
+      setCopyToast({
+        open: true,
+        message: "Switch to README view to download markdown.",
+        severity: "info",
+      });
+      return;
+    }
+    const parts = readmeSectionMarkdownsRef.current;
+    const text = Array.isArray(parts) ? parts.join("\n\n") : "";
+    if (!text.trim()) {
+      setCopyToast({
+        open: true,
+        message: "No README content loaded yet.",
+        severity: "warning",
+      });
+      return;
+    }
+    const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const folderLabel =
+      normalizedPathSegments.length > 0
+        ? normalizedPathSegments[normalizedPathSegments.length - 1]
+        : "root";
+    const safeStem =
+      folderLabel.replace(/[^\w\u0600-\u06FF.-]+/g, "_").replace(/^_|_$/g, "") || "README";
+    a.href = url;
+    a.download = `${safeStem}-README.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setCopyToast({
+      open: true,
+      message: "README markdown downloaded.",
+      severity: "success",
+    });
+  };
 
   return (
     <TtsProvider
@@ -832,6 +945,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
         authChecking={authChecking}
         onSignInGithub={handleSignInGithub}
         onSignOutGithub={handleSignOutGithub}
+        onDownloadReadmeMarkdown={handleDownloadFullReadmeMarkdown}
       />
       <div id="print-header" style={{display: 'none'}}></div>
       <Container p={2} mt={2}>
