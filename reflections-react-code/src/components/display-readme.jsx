@@ -3,7 +3,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import CancelIcon from '@mui/icons-material/Cancel';
 import ImageIcon from '@mui/icons-material/Image';
+import DownloadIcon from '@mui/icons-material/Download';
 import SaveIcon from '@mui/icons-material/Save';
+import SendIcon from '@mui/icons-material/Send';
 import StopIcon from '@mui/icons-material/Stop';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import Alert from '@mui/material/Alert';
@@ -362,6 +364,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
     const [rewordingSectionIndex, setRewordingSectionIndex] = useState(null);
     /** Snapshot of section markdown before the last successful reword; drives split compare UI */
     const [rewordCompareOriginal, setRewordCompareOriginal] = useState(null);
+    const [rewordInstruction, setRewordInstruction] = useState('');
     const [generatingImageSectionIndex, setGeneratingImageSectionIndex] = useState(null);
     const [snackbarState, setSnackbarState] = useState({
         open: false,
@@ -486,6 +489,27 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
         setEditingSectionIndex(null);
         setEditingMarkdown('');
         setRewordCompareOriginal(null);
+        setRewordInstruction('');
+    };
+
+    const handleDownloadMarkdown = (idx) => {
+        const source = editingSectionIndex === idx ? editingMarkdown : sections[idx]?.markdown || '';
+        if (!source.trim()) {
+            setSnackbarState({
+                open: true,
+                message: 'No markdown content to download.',
+                severity: 'warning'
+            });
+            return;
+        }
+
+        const blob = new Blob([source], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `section-${idx + 1}.md`;
+        anchor.click();
+        URL.revokeObjectURL(url);
     };
 
     const handleSaveEdit = async (idx) => {
@@ -547,6 +571,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
             setEditingSectionIndex(null);
             setEditingMarkdown('');
             setRewordCompareOriginal(null);
+            setRewordInstruction('');
             setSnackbarState({
                 open: true,
                 message: 'Section updated and saved to GitHub.',
@@ -579,7 +604,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
             .join('\n\n');
     };
 
-    const handleRewordSection = async (idx) => {
+    const handleRewordSection = async (idx, userInstruction = '') => {
         if (!canEditReflections || !githubToken) {
             setSnackbarState({
                 open: true,
@@ -613,7 +638,11 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                 fullReadmeMarkdown,
                 '---END_FULL_README---',
                 '',
-                'أعد صياغة وتحليل **القسم المحدد فقط** أدناه وفق تعليمات النظام. أخرج نص القسم المعاد صياغته فقط، بالعربية، دون أي مقدمة أو شرح.',
+                userInstruction.trim()
+                    ? `تعليمات إضافية من الكاتب لإعادة الصياغة: ${userInstruction.trim()}`
+                    : 'لا توجد تعليمات إضافية من الكاتب.',
+                '',
+                'أعد صياغة وتحليل **القسم المحدد فقط** أدناه وفق تعليمات النظام والتعليمات الإضافية أعلاه. أخرج نص القسم المعاد صياغته فقط، بالعربية، دون أي مقدمة أو شرح.',
                 '',
                 '---BEGIN_SECTION_TO_REWORD---',
                 sourceMarkdown,
@@ -874,6 +903,25 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                                     </IconButton>
                                                 </span>
                                             </Tooltip>
+                                            {tts.isPreparingAudio && tts.preparingSectionIndex === idx && (
+                                                <Typography
+                                                    variant="caption"
+                                                    sx={{
+                                                        alignSelf: 'center',
+                                                        color: 'text.secondary',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 0.5
+                                                    }}
+                                                >
+                                                    <Box sx={{ display: 'inline-flex' }}>
+                                                        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                                                            <circle cx="5" cy="5" r="4" fill="currentColor" />
+                                                        </svg>
+                                                    </Box>
+                                                    {`Loading audio… speaking in ~${Math.max(tts.preparingEtaSeconds, 1)}s`}
+                                                </Typography>
+                                            )}
                                             <IconButton
                                                 size="small"
                                                 onClick={() => handleStartEdit(idx)}
@@ -888,6 +936,101 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
 
                                 {editingSectionIndex === idx ? (
                                     <div className="markdown-content" style={{ paddingLeft: sectionToolsPaddingLeft }}>
+                                        <Box
+                                            sx={{
+                                                mb: 1.25,
+                                                p: 1,
+                                                borderRadius: 2,
+                                                border: '1px solid rgba(25, 118, 210, 0.18)',
+                                                background: 'linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)',
+                                                boxShadow: '0 2px 10px rgba(15, 23, 42, 0.06)'
+                                            }}
+                                        >
+                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                                                <Tooltip title="Save to GitHub">
+                                                    <span>
+                                                        <IconButton
+                                                            color="primary"
+                                                            onClick={() => handleSaveEdit(idx)}
+                                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                        >
+                                                            <SaveIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                                <Tooltip title="Cancel editing">
+                                                    <span>
+                                                        <IconButton
+                                                            color="default"
+                                                            onClick={handleCancelEdit}
+                                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                        >
+                                                            <CancelIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                                <Tooltip title="Reword section with OpenAI">
+                                                    <span>
+                                                        <IconButton
+                                                            color="secondary"
+                                                            onClick={() => handleRewordSection(idx)}
+                                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                        >
+                                                            <AutoFixHighIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                                <Tooltip title="Generate section image and save to GitHub">
+                                                    <span>
+                                                        <IconButton
+                                                            color="success"
+                                                            onClick={() => handleGenerateSectionImage(idx)}
+                                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                        >
+                                                            <ImageIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                                <Tooltip title="Download section as Markdown">
+                                                    <span>
+                                                        <IconButton
+                                                            color="inherit"
+                                                            onClick={() => handleDownloadMarkdown(idx)}
+                                                            disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                        >
+                                                            <DownloadIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </span>
+                                                </Tooltip>
+                                                {(rewordingSectionIndex === idx || generatingImageSectionIndex === idx) && (
+                                                    <Typography variant="caption" sx={{ alignSelf: 'center', pl: 0.25 }}>
+                                                        {rewordingSectionIndex === idx ? 'Rewording...' : 'Generating image...'}
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                            <Box sx={{ mt: 1 }}>
+                                                <TextField
+                                                    size="small"
+                                                    fullWidth
+                                                    value={rewordInstruction}
+                                                    onChange={(event) => setRewordInstruction(event.target.value)}
+                                                    placeholder="Optional: custom instructions for OpenAI rewording…"
+                                                    disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                    InputProps={{
+                                                        endAdornment: (
+                                                            <IconButton
+                                                                size="small"
+                                                                onClick={() => handleRewordSection(idx, rewordInstruction)}
+                                                                disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
+                                                                aria-label="Send custom reword instruction"
+                                                            >
+                                                                <SendIcon fontSize="small" />
+                                                            </IconButton>
+                                                        )
+                                                    }}
+                                                />
+                                            </Box>
+                                        </Box>
                                         <Box
                                             sx={{
                                                 display: 'flex',
@@ -992,57 +1135,6 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                                     }}
                                                 />
                                             </Box>
-                                        </Box>
-                                        <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                                            <Tooltip title="Save to GitHub">
-                                                <span>
-                                                    <IconButton
-                                                        color="primary"
-                                                        onClick={() => handleSaveEdit(idx)}
-                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
-                                                    >
-                                                        <SaveIcon fontSize="small" />
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                            <Tooltip title="Cancel editing">
-                                                <span>
-                                                    <IconButton
-                                                        color="default"
-                                                        onClick={handleCancelEdit}
-                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
-                                                    >
-                                                        <CancelIcon fontSize="small" />
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                            <Tooltip title="Reword section with OpenAI">
-                                                <span>
-                                                    <IconButton
-                                                        color="secondary"
-                                                        onClick={() => handleRewordSection(idx)}
-                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
-                                                    >
-                                                        <AutoFixHighIcon fontSize="small" />
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                            <Tooltip title="Generate section image and save to GitHub">
-                                                <span>
-                                                    <IconButton
-                                                        color="success"
-                                                        onClick={() => handleGenerateSectionImage(idx)}
-                                                        disabled={savingEdit || rewordingSectionIndex === idx || generatingImageSectionIndex === idx}
-                                                    >
-                                                        <ImageIcon fontSize="small" />
-                                                    </IconButton>
-                                                </span>
-                                            </Tooltip>
-                                            {(rewordingSectionIndex === idx || generatingImageSectionIndex === idx) && (
-                                                <Typography variant="caption" sx={{ alignSelf: 'center' }}>
-                                                    {rewordingSectionIndex === idx ? 'Rewording...' : 'Generating image...'}
-                                                </Typography>
-                                            )}
                                         </Box>
                                     </div>
                                 ) : (

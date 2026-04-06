@@ -60,6 +60,9 @@ const Header = ({
     toggleGlobalSpeak,
     isSpeaking,
     isGlobalArticle,
+    isPreparingAudio,
+    preparingSectionIndex,
+    preparingEtaSeconds,
     ttsEnabled,
   } = useTts();
   const [exportingEpub, setExportingEpub] = useState(false);
@@ -286,6 +289,14 @@ const Header = ({
                     )}
                   </IconButton>
                 </Tooltip>
+                {isPreparingAudio && preparingSectionIndex != null && (
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, pl: 0.25 }}>
+                    <CircularProgress size={14} color="inherit" />
+                    <Typography variant="caption" sx={{ opacity: 0.95, whiteSpace: "nowrap" }}>
+                      {`Loading audio… speaking in ~${Math.max(preparingEtaSeconds, 1)}s`}
+                    </Typography>
+                  </Box>
+                )}
               </>
             )}
           </Box>

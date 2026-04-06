@@ -3,6 +3,7 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -42,10 +43,23 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [activeSectionIndex, setActiveSectionIndex] = useState(null);
   const [isGlobalArticle, setIsGlobalArticle] = useState(false);
+  const [isPreparingAudio, setIsPreparingAudio] = useState(false);
+  const [preparingSectionIndex, setPreparingSectionIndex] = useState(null);
+  const [preparingEtaSeconds, setPreparingEtaSeconds] = useState(0);
 
   const audioRef = useRef(null);
   const urlRef = useRef(null);
   const stopFlagRef = useRef(false);
+
+  useEffect(() => {
+    if (!isPreparingAudio || preparingEtaSeconds <= 0) {
+      return () => {};
+    }
+    const timer = window.setInterval(() => {
+      setPreparingEtaSeconds((current) => (current > 0 ? current - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isPreparingAudio, preparingEtaSeconds]);
 
   const releaseAudio = useCallback(() => {
     try {
@@ -70,6 +84,9 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
     setIsSpeaking(false);
     setActiveSectionIndex(null);
     setIsGlobalArticle(false);
+    setIsPreparingAudio(false);
+    setPreparingSectionIndex(null);
+    setPreparingEtaSeconds(0);
   }, [releaseAudio]);
 
   const setVoice = useCallback((id) => {
@@ -99,9 +116,15 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
         dangerouslyAllowBrowser: true,
       });
 
+      let chunkIndex = 0;
       for (const input of chunks) {
         if (stopFlagRef.current) {
           break;
+        }
+        if (chunkIndex === 0) {
+          setIsPreparingAudio(true);
+          setPreparingSectionIndex(sectionIndex);
+          setPreparingEtaSeconds(Math.max(2, Math.min(12, Math.round(input.length / 140))));
         }
         const response = await client.audio.speech.create({
           model: "tts-1",
@@ -117,8 +140,15 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
         await new Promise((resolve, reject) => {
           audio.onended = () => resolve();
           audio.onerror = () => reject(new Error("Audio playback failed"));
-          audio.play().catch(reject);
+          audio
+            .play()
+            .then(() => {
+              setIsPreparingAudio(false);
+              setPreparingEtaSeconds(0);
+            })
+            .catch(reject);
         });
+        chunkIndex += 1;
       }
     },
     [enabled, voice, getApiKey, releaseAudio]
@@ -147,6 +177,9 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
         setIsSpeaking(false);
         setActiveSectionIndex(null);
         setIsGlobalArticle(false);
+        setIsPreparingAudio(false);
+        setPreparingSectionIndex(null);
+        setPreparingEtaSeconds(0);
       }
     },
     [enabled, stop, playInputChunks, releaseAudio]
@@ -186,6 +219,9 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
       setIsSpeaking(false);
       setActiveSectionIndex(null);
       setIsGlobalArticle(false);
+      setIsPreparingAudio(false);
+      setPreparingSectionIndex(null);
+      setPreparingEtaSeconds(0);
     }
   }, [enabled, stop, sectionMarkdownsRef, playInputChunks, releaseAudio]);
 
@@ -209,6 +245,9 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
       isSpeaking,
       activeSectionIndex,
       isGlobalArticle,
+      isPreparingAudio,
+      preparingSectionIndex,
+      preparingEtaSeconds,
       ttsEnabled: enabled,
     }),
     [
@@ -221,6 +260,9 @@ export function TtsProvider({ children, getApiKey, enabled, sectionMarkdownsRef 
       isSpeaking,
       activeSectionIndex,
       isGlobalArticle,
+      isPreparingAudio,
+      preparingSectionIndex,
+      preparingEtaSeconds,
       enabled,
     ]
   );
