@@ -2,6 +2,8 @@ import AddIcon from "@mui/icons-material/Add";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 import CloseIcon from "@mui/icons-material/Close";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import SaveIcon from "@mui/icons-material/Save";
 import {
@@ -190,6 +192,32 @@ export default function QuranResearchDialog({
     } finally {
       setFetching(false);
     }
+  };
+
+  const handleClearAllVerses = () => {
+    if (items.length === 0) {
+      return;
+    }
+    setItems([]);
+    setEditingId(null);
+    setTagFilter(null);
+    setNewTagDraft({});
+    notify(
+      "All verses removed from this session. Click Save to GitHub to overwrite the saved file, or close without saving to keep the remote file unchanged.",
+      "info"
+    );
+  };
+
+  const handleRemoveVerse = (itemId, event) => {
+    event?.stopPropagation();
+    setItems((prev) => prev.filter((it) => it.id !== itemId));
+    setEditingId((id) => (id === itemId ? null : id));
+    setNewTagDraft((d) => {
+      const next = { ...d };
+      delete next[itemId];
+      return next;
+    });
+    notify("Verse removed from this session.", "info");
   };
 
   const reorderById = (fromId, toId) => {
@@ -439,6 +467,27 @@ export default function QuranResearchDialog({
           >
             {fetching ? <CircularProgress size={22} sx={{ color: "#0f172a" }} /> : "Retrieve verses"}
           </Button>
+          <Button
+            variant="outlined"
+            disabled={items.length === 0}
+            startIcon={<DeleteSweepIcon />}
+            onClick={handleClearAllVerses}
+            sx={{
+              borderColor: "rgba(248, 113, 113, 0.55)",
+              color: "#fecaca",
+              fontWeight: 600,
+              "&:hover": {
+                borderColor: "#f87171",
+                bgcolor: "rgba(248, 113, 113, 0.12)",
+              },
+              "&.Mui-disabled": {
+                borderColor: "rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.35)",
+              },
+            }}
+          >
+            Clear all verses
+          </Button>
           {loadingFile && (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: { sm: 1 } }}>
               <CircularProgress size={20} sx={{ color: accentBright }} />
@@ -596,6 +645,19 @@ export default function QuranResearchDialog({
                   )}
                 </Box>
                 <Box sx={{ display: "flex", gap: 0.5 }}>
+                  <Tooltip title="Remove this verse from the list">
+                    <IconButton
+                      size="small"
+                      aria-label="remove verse"
+                      onClick={(e) => handleRemoveVerse(item.id, e)}
+                      sx={{
+                        color: "#fca5a5",
+                        "&:hover": { bgcolor: "rgba(248, 113, 113, 0.15)" },
+                      }}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Copy verse text">
                     <IconButton
                       size="small"

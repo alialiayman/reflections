@@ -3,6 +3,7 @@ import { saveAs } from "file-saver";
 import JSZip from "jszip";
 import { marked } from "marked";
 import { GITHUB } from "../constants";
+import { addH2SequencesToSections } from "./markdown-section-h2";
 
 const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -477,7 +478,7 @@ export const buildEpubLikePreview = async ({
   sectionImageMiddleRatio,
 }) => {
   const markdown = await fetchMarkdown(path);
-  const sections = splitMarkdownSections(markdown);
+  const sections = addH2SequencesToSections(splitMarkdownSections(markdown));
   const firstHeaderTitle = extractFirstMarkdownHeader(markdown);
   const resolvedSectionImageMiddleRatio = resolveSectionImageMiddleRatio(
     sectionImageMiddleRatio
@@ -529,6 +530,7 @@ export const buildEpubLikePreview = async ({
 
     return {
       heading: section.heading,
+      h2Sequence: section.h2Sequence ?? null,
       html: `${sectionHtml}${endImagesHtml ? `\n${endImagesHtml}` : ""}`,
     };
   });

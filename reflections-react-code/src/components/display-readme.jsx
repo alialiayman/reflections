@@ -10,6 +10,7 @@ import StopIcon from '@mui/icons-material/Stop';
 import VolumeUpIcon from '@mui/icons-material/VolumeUp';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
+import Chip from '@mui/material/Chip';
 import Snackbar from '@mui/material/Snackbar';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
@@ -22,6 +23,7 @@ import remarkGfm from 'remark-gfm';
 import { GITHUB, getVisionKey } from '../constants';
 import { REWORD_SECTION_SYSTEM_PROMPT } from '../prompts/reword-section-system-prompt';
 import { useTts } from '../context/TtsContext';
+import { addH2SequencesToSections } from '../utils/markdown-section-h2';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -479,7 +481,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
             sectionsArr.push({ heading: '', markdown: markdownText.trim() });
         }
 
-        setSections(sectionsArr);
+        setSections(addH2SequencesToSections(sectionsArr));
     };
 
     const handleSnackbarClose = (_, reason) => {
@@ -595,7 +597,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                 }
             );
 
-            setSections(updatedSections);
+            setSections(addH2SequencesToSections(updatedSections));
             setEditingSectionIndex(null);
             setEditingMarkdown('');
             setRewordCompareOriginal(null);
@@ -867,8 +869,12 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                 throw new Error('No generated image returned');
             }
 
-            const nextNumber = await getNextImageNumberInFolder();
-            const generatedFileName = `${nextNumber} ${recommendedStem}${DEFAULT_GENERATED_IMAGE_EXTENSION}`;
+            const h2Seq = sections[idx]?.h2Sequence;
+            const imageNumber =
+                h2Seq != null && Number.isInteger(h2Seq)
+                    ? h2Seq
+                    : await getNextImageNumberInFolder();
+            const generatedFileName = `${imageNumber} ${recommendedStem}${DEFAULT_GENERATED_IMAGE_EXTENSION}`;
             const githubImagePath = [...getNormalizedPathSegments(path), generatedFileName].join('/');
             const encodedImagePath = toEncodedGitHubContentsPath(githubImagePath);
             const imageContentsUrl = `${REPO_CONTENTS_API_BASE}/${encodedImagePath}`;
@@ -1022,6 +1028,15 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                             }}
                                         >
                                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                                                {section.h2Sequence != null && (
+                                                    <Chip
+                                                        size="small"
+                                                        color="primary"
+                                                        variant="filled"
+                                                        label={`Heading ${section.h2Sequence}`}
+                                                        sx={{ fontWeight: 700, mr: 0.5 }}
+                                                    />
+                                                )}
                                                 <Tooltip title="Save to GitHub">
                                                     <span>
                                                         <IconButton
@@ -1044,7 +1059,13 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                                         </IconButton>
                                                     </span>
                                                 </Tooltip>
-                                                <Tooltip title="Generate section image and save to GitHub">
+                                                <Tooltip
+                                                    title={
+                                                        section.h2Sequence != null
+                                                            ? `Generate image (saved as ${section.h2Sequence} <name>.png to match this heading)`
+                                                            : 'Generate section image and save to GitHub'
+                                                    }
+                                                >
                                                     <span>
                                                         <IconButton
                                                             color="success"
