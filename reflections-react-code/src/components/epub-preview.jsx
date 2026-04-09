@@ -60,22 +60,8 @@ const EpubPreview = ({ path, images }) => {
         <section
           key={`${section.heading}-${index}`}
           style={{ marginBottom: "1.5rem", borderBottom: "1px solid #eee", paddingBottom: "1rem" }}
-        >
-          {section.h2Sequence != null && (
-            <div
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: 700,
-                color: "#1B4D3E",
-                marginBottom: "0.5rem",
-                letterSpacing: "0.03em",
-              }}
-            >
-              Heading {section.h2Sequence}
-            </div>
-          )}
-          <div dangerouslySetInnerHTML={{ __html: section.html }} />
-        </section>
+          dangerouslySetInnerHTML={{ __html: section.html }}
+        />
       ))}
     </div>
   );

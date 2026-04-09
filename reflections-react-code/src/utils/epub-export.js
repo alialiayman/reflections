@@ -472,6 +472,17 @@ const buildSectionPreviewFigureHtml = (image) =>
       fileNameWithoutExtension(image.name)
   )}</figcaption></figure>`;
 
+/** In-app reading preview only — prefix first `##` like README text view; never written to repo or EPUB files */
+const prefixFirstH2LineWithNumberForPreview = (markdown, n) => {
+  if (n == null || !Number.isInteger(n) || typeof markdown !== "string") {
+    return markdown;
+  }
+  return markdown.replace(/^## (?!#)([^\r\n]*)$/m, (_, rest) => {
+    const body = rest.replace(/^\s+/, "");
+    return `## ${n}. ${body}`;
+  });
+};
+
 export const buildEpubLikePreview = async ({
   path,
   images,
@@ -519,8 +530,13 @@ export const buildEpubLikePreview = async ({
       .map((image) => buildSectionPreviewFigureHtml(image))
       .join("\n");
 
-    const markdownWithMiddleImages = injectHtmlAtMarkdownMidpoint(
+    const markdownForPreview = prefixFirstH2LineWithNumberForPreview(
       section.markdown,
+      section.h2Sequence
+    );
+
+    const markdownWithMiddleImages = injectHtmlAtMarkdownMidpoint(
+      markdownForPreview,
       middleImagesHtml
     );
 
@@ -530,7 +546,6 @@ export const buildEpubLikePreview = async ({
 
     return {
       heading: section.heading,
-      h2Sequence: section.h2Sequence ?? null,
       html: `${sectionHtml}${endImagesHtml ? `\n${endImagesHtml}` : ""}`,
     };
   });
