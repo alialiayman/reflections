@@ -124,52 +124,87 @@ const toEncodedGitHubContentsPath = (repoPath = "") =>
     .map((segment) => encodeURIComponent(segment))
     .join("/");
 
-/** Binary-safe base64 for GitHub Contents API (GitHub often omits `content` for images; use `download_url` fallback). */
-const arrayBufferToBase64 = (buffer) => {
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const end = Math.min(i + chunkSize, bytes.length);
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, end));
-  }
-  return window.btoa(binary);
-};
-
 const normalizeGithubContentBase64 = (raw) =>
   typeof raw === "string" ? raw.replace(/\s+/g, "") : "";
 
 /**
- * Loads file bytes as base64. Prefers JSON `content`; otherwise uses the Contents API with
- * `Accept: application/vnd.github.raw` (browser CORS works on api.github.com; raw.githubusercontent.com often does not).
- *
- * @param {object} fileMetadata - GitHub GET /contents/{path} JSON
- * @param {string} token - OAuth token
- * @param {string} apiContentsUrl - Same resource URL used for the JSON GET (no ?ref= suffix)
+ * Detect base64 that decodes to GitHub JSON metadata (would corrupt binary files if uploaded).
  */
-const getGithubContentsFileBase64 = async (fileMetadata, token, apiContentsUrl) => {
+const base64DecodesToGithubMetadataJson = (b64) => {
+  if (!b64 || typeof b64 !== "string") {
+    return false;
+  }
+  const chunk = b64.slice(0, 240);
+  let decoded = "";
+  try {
+    decoded = window.atob(chunk);
+  } catch {
+    return false;
+  }
+  const t = decoded.trimStart();
+  return (
+    t.startsWith("{") &&
+    (t.includes('"encoding"') || t.includes('"download_url"')) &&
+    t.includes('"sha"')
+  );
+};
+
+/**
+ * Loads file bytes as base64 for Contents API PUT.
+ * - Small files: inline `content` on the metadata response.
+ * - Large files (GitHub omits `content`, encoding "none"): use **Git Blobs API** — the old
+ *   `Accept: application/vnd.github.raw` on /contents/ often returns JSON metadata in the browser,
+ *   which was accidentally uploaded and destroyed PNGs.
+ *
+ * @param {object} fileMetadata - GitHub GET /contents/{path} JSON (must include `sha` for blobs)
+ */
+const getGithubContentsFileBase64 = async (fileMetadata, token) => {
   const fromField = normalizeGithubContentBase64(fileMetadata?.content);
   if (fromField) {
+    if (base64DecodesToGithubMetadataJson(fromField)) {
+      throw new Error(
+        "Refusing to use inline content: it looks like API metadata, not file bytes. Use blob API."
+      );
+    }
     return fromField;
   }
-  if (!token || !apiContentsUrl) {
+  const blobSha = fileMetadata?.sha;
+  if (!token || !blobSha) {
     throw new Error(
-      "GitHub returned no inline content and raw download needs a signed-in session."
+      "GitHub returned no inline content and no blob SHA (cannot load large file for rename)."
     );
   }
   try {
-    const res = await axios.get(`${apiContentsUrl}?ref=main`, {
+    const blobUrl = `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/git/blobs/${blobSha}`;
+    const res = await axios.get(blobUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github.raw",
+        Accept: "application/vnd.github+json",
       },
-      responseType: "arraybuffer",
     });
-    return arrayBufferToBase64(res.data);
+    const b64 = normalizeGithubContentBase64(res.data?.content);
+    if (!b64 || res.data?.encoding !== "base64") {
+      throw new Error("GitHub blob response missing base64 body.");
+    }
+    if (base64DecodesToGithubMetadataJson(b64)) {
+      throw new Error("Blob payload looks like JSON metadata, not binary file data.");
+    }
+    return b64;
   } catch (e) {
+    if (e instanceof Error) {
+      const m = e.message;
+      if (
+        m.startsWith("Refusing") ||
+        m.includes("GitHub blob response") ||
+        m.includes("inline content:") ||
+        m.includes("Blob payload looks like")
+      ) {
+        throw e;
+      }
+    }
     const detail = formatGithubRequestError(e);
     throw new Error(
-      detail || e?.message || "Could not load raw file bytes from the GitHub API."
+      detail || (e instanceof Error ? e.message : "") || "Could not load file bytes from GitHub (git blob API)."
     );
   }
 };
@@ -800,11 +835,7 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
 
       let base64Content;
       try {
-        base64Content = await getGithubContentsFileBase64(
-          fileResponse.data,
-          githubToken,
-          currentContentsUrl
-        );
+        base64Content = await getGithubContentsFileBase64(fileResponse.data, githubToken);
       } catch (readErr) {
         throw new Error(
           readErr instanceof Error ? readErr.message : "Could not read image bytes from GitHub."
