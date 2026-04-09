@@ -140,33 +140,38 @@ const normalizeGithubContentBase64 = (raw) =>
   typeof raw === "string" ? raw.replace(/\s+/g, "") : "";
 
 /**
+ * Loads file bytes as base64. Prefers JSON `content`; otherwise uses the Contents API with
+ * `Accept: application/vnd.github.raw` (browser CORS works on api.github.com; raw.githubusercontent.com often does not).
+ *
  * @param {object} fileMetadata - GitHub GET /contents/{path} JSON
- * @param {string} token - OAuth token (required for private raw fetch)
+ * @param {string} token - OAuth token
+ * @param {string} apiContentsUrl - Same resource URL used for the JSON GET (no ?ref= suffix)
  */
-const getGithubContentsFileBase64 = async (fileMetadata, token) => {
+const getGithubContentsFileBase64 = async (fileMetadata, token, apiContentsUrl) => {
   const fromField = normalizeGithubContentBase64(fileMetadata?.content);
   if (fromField) {
     return fromField;
   }
-  const downloadUrl = fileMetadata?.download_url;
-  if (!downloadUrl || typeof downloadUrl !== "string") {
+  if (!token || !apiContentsUrl) {
     throw new Error(
-      "GitHub returned no inline content and no download URL (file may be too large for the API)."
+      "GitHub returned no inline content and raw download needs a signed-in session."
     );
   }
-  const res = await fetch(downloadUrl, {
-    headers: token
-      ? {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github.v3.raw",
-        }
-      : {},
-  });
-  if (!res.ok) {
-    throw new Error(`Could not download file bytes (HTTP ${res.status}).`);
+  try {
+    const res = await axios.get(`${apiContentsUrl}?ref=main`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github.raw",
+      },
+      responseType: "arraybuffer",
+    });
+    return arrayBufferToBase64(res.data);
+  } catch (e) {
+    const detail = formatGithubRequestError(e);
+    throw new Error(
+      detail || e?.message || "Could not load raw file bytes from the GitHub API."
+    );
   }
-  const buf = await res.arrayBuffer();
-  return arrayBufferToBase64(buf);
 };
 
 const formatGithubRequestError = (error) => {
@@ -225,7 +230,7 @@ function App() {
   const [open, setOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedImageName, setSelectedImageName] = useState("");
-  const [previewMode, setPreviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(true);
   const [imageDescription, setImageDescription] = useState("");
   const [describingImage, setDescribingImage] = useState(false);
   const [borderColorIndex, setBorderColorIndex] = useState(0);
@@ -795,7 +800,11 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
 
       let base64Content;
       try {
-        base64Content = await getGithubContentsFileBase64(fileResponse.data, githubToken);
+        base64Content = await getGithubContentsFileBase64(
+          fileResponse.data,
+          githubToken,
+          currentContentsUrl
+        );
       } catch (readErr) {
         throw new Error(
           readErr instanceof Error ? readErr.message : "Could not read image bytes from GitHub."

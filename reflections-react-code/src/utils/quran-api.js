@@ -3,6 +3,8 @@
  * Responses are cached in-memory for the session.
  */
 
+import { getArabicSurahName } from "../constants/surah-arabic-names";
+
 const API_BASE = "https://api.alquran.cloud/v1";
 
 const surahCache = new Map();
@@ -47,12 +49,13 @@ export async function fetchVerseRange(surah, startVerse, endVerse) {
   );
   const lines = ayahs.map((a) => (a.text || "").replace(/^\uFEFF/, "").trim());
   const text = lines.join("\n\n");
+  const apiArabic = typeof data.name === "string" ? data.name.replace(/^\uFEFF/, "").trim() : "";
   return {
     text,
     surah: data.number,
     start,
     end,
     surahName: data.englishName,
-    arabicName: data.name,
+    arabicName: apiArabic || getArabicSurahName(data.number),
   };
 }

@@ -16,7 +16,7 @@ import Tooltip from '@mui/material/Tooltip';
 import { Typography } from '@mui/material';
 import IconButton from '@mui/material/IconButton';
 import axios from 'axios';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { GITHUB, getVisionKey } from '../constants';
@@ -388,6 +388,19 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
     });
 
     const tts = useTts();
+
+    /** Display-only: prefix each ## heading with a running index (not written to GitHub). */
+    const sectionsForView = useMemo(() => {
+        let counter = 0;
+        return sections.map((section) => ({
+            ...section,
+            displayMarkdown: section.markdown.replace(/^## (?!#)([^\r\n]*)$/gm, (_, rest) => {
+                counter += 1;
+                const body = rest.replace(/^\s+/, '');
+                return `## ${counter}. ${body}`;
+            })
+        }));
+    }, [sections]);
 
     useEffect(() => {
         if (sectionMarkdownsRef) {
@@ -922,7 +935,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
             ) : (
                 <div>
                     <div>
-                        {sections.map((section, idx) => (
+                        {sectionsForView.map((section, idx) => (
                             <div
                                 key={idx}
                                 style={{
@@ -1198,7 +1211,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
                                                 td: ({ children, ...props }) => <FolderListTableCell {...props}>{children}</FolderListTableCell>
                                             }}
                                         >
-                                            {section.markdown}
+                                            {section.displayMarkdown}
                                         </Markdown>
                                     </div>
                                 )}

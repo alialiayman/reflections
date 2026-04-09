@@ -4,7 +4,7 @@ const END = "<<<END_REFLECTIONS_QURAN>>>";
 export const QURAN_RESEARCH_FILENAME = "quran-research.md";
 
 /**
- * @typedef {{ id: string, surah: number, from: number, to: number, text: string, tags: string[] }} QuranResearchItem
+ * @typedef {{ id: string, surah: number, from: number, to: number, text: string, tags: string[], arabicName?: string }} QuranResearchItem
  */
 
 /**
@@ -39,6 +39,7 @@ export function parseQuranResearchMarkdown(markdown) {
         tags: Array.isArray(row.tags)
           ? row.tags.map((t) => String(t).trim()).filter(Boolean)
           : [],
+        arabicName: typeof row.arabicName === "string" ? row.arabicName.trim() : "",
       };
       })
       .filter(
@@ -69,6 +70,7 @@ export function serializeQuranResearchMarkdown(items) {
       to: it.to,
       text: it.text,
       tags: it.tags,
+      ...(it.arabicName ? { arabicName: it.arabicName } : {}),
     })),
   };
   const json = JSON.stringify(payload, null, 2);

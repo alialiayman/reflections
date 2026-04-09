@@ -234,11 +234,17 @@ const Header = ({
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip title={previewMode ? "Show README" : "EPUB-like preview"}>
+            <Tooltip
+              title={
+                previewMode
+                  ? "Switch to text README (numbered ## headings for image matching)"
+                  : "Reading view: inline images in place"
+              }
+            >
               <IconButton
                 color="inherit"
                 onClick={onTogglePreview}
-                aria-label={previewMode ? "Show README" : "EPUB preview"}
+                aria-label={previewMode ? "Show README text view" : "Show reading view with images"}
                 sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
               >
                 <VisibilityIcon />

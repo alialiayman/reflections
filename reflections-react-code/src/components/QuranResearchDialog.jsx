@@ -16,6 +16,7 @@ import {
   DialogTitle,
   IconButton,
   Paper,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -30,6 +31,7 @@ import {
   parseQuranResearchMarkdown,
   serializeQuranResearchMarkdown,
 } from "../utils/quran-research-format";
+import { getArabicSurahName } from "../constants/surah-arabic-names";
 
 const GITHUB_API_BASE = "https://api.github.com";
 const GITHUB_REPO_OWNER = "alialiayman";
@@ -176,9 +178,13 @@ export default function QuranResearchDialog({
           to: result.end,
           text: result.text,
           tags: [],
+          arabicName: result.arabicName || getArabicSurahName(result.surah),
         },
       ]);
-      notify(`Loaded surah ${result.surah}, verses ${result.start}–${result.end}.`, "success");
+      notify(
+        `Loaded ${result.arabicName || getArabicSurahName(result.surah)} (${result.surah}:${result.start}–${result.end}).`,
+        "success"
+      );
     } catch (e) {
       notify(e instanceof Error ? e.message : "Failed to fetch verses.", "error");
     } finally {
@@ -234,7 +240,12 @@ export default function QuranResearchDialog({
       notify("Saving requires editor access on this repository.", "warning");
       return;
     }
-    const md = serializeQuranResearchMarkdown(items);
+    const md = serializeQuranResearchMarkdown(
+      items.map((it) => ({
+        ...it,
+        arabicName: (it.arabicName && String(it.arabicName).trim()) || getArabicSurahName(it.surah),
+      }))
+    );
     setSaving(true);
     try {
       const body = {
@@ -266,10 +277,12 @@ export default function QuranResearchDialog({
       notify("OpenAI is not configured for this app.", "warning");
       return;
     }
-    const refLabel = `${item.surah}:${item.from}${item.from !== item.to ? `–${item.to}` : ""}`;
+    const refForAi = `${item.arabicName || getArabicSurahName(item.surah) || "سورة"} ${item.surah}:${item.from}${
+      item.from !== item.to ? `–${item.to}` : ""
+    }`;
     setSuggestingId(item.id);
     try {
-      const suggested = await suggestQuranTags(item.text, refLabel, getOpenAiKey);
+      const suggested = await suggestQuranTags(item.text, refForAi.trim(), getOpenAiKey);
       if (!suggested.length) {
         notify("No tags were suggested.", "info");
         return;
@@ -296,8 +309,11 @@ export default function QuranResearchDialog({
     }
   };
 
-  const refLabel = (it) =>
+  const verseAyahRange = (it) =>
     `${it.surah}:${it.from}${it.from !== it.to ? `–${it.to}` : ""}`;
+
+  const arabicSurahTitle = (it) =>
+    (it.arabicName && String(it.arabicName).trim()) || getArabicSurahName(it.surah) || `سورة ${it.surah}`;
 
   return (
     <Dialog
@@ -308,10 +324,13 @@ export default function QuranResearchDialog({
       scroll="paper"
       PaperProps={{
         sx: {
-          bgcolor: "#12121c",
+          background: "linear-gradient(165deg, #16162a 0%, #0c0c14 45%, #12121c 100%)",
           color: textPrimary,
           minHeight: "70vh",
           maxHeight: "92vh",
+          border: `1px solid ${borderStrong}`,
+          borderRadius: 3,
+          boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
         },
       }}
     >
@@ -320,50 +339,62 @@ export default function QuranResearchDialog({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          background: "linear-gradient(90deg, rgba(94,234,212,0.14) 0%, transparent 55%)",
           borderBottom: `1px solid ${borderStrong}`,
           pr: 1,
+          py: 2,
           color: textPrimary,
         }}
       >
-        <Typography variant="h6" component="span" sx={{ color: textPrimary, fontWeight: 600 }}>
-          Quran research
-        </Typography>
+        <Box>
+          <Typography variant="overline" sx={{ color: textMuted, letterSpacing: "0.12em", display: "block" }}>
+            Reflections
+          </Typography>
+          <Typography variant="h6" component="span" sx={{ color: textPrimary, fontWeight: 700 }}>
+            Quran research
+          </Typography>
+        </Box>
         <IconButton onClick={onClose} aria-label="close" sx={{ color: textPrimary }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent dividers sx={{ borderColor: borderMuted, color: textPrimary }}>
-        <Typography variant="body2" sx={{ mb: 2, color: textSecondary, lineHeight: 1.65 }}>
+      <DialogContent dividers sx={{ borderColor: borderMuted, color: textPrimary, pt: 3 }}>
+        <Stack spacing={3}>
+        <Typography variant="body2" sx={{ color: textSecondary, lineHeight: 1.7 }}>
           Verses load from{" "}
           <Box component="span" sx={{ color: accentBright, fontWeight: 600 }}>
             api.alquran.cloud
           </Box>{" "}
-          (Uthmani text, no API key). Research is saved as{" "}
+          (Uthmani text, no API key). Saved as{" "}
           <Box component="span" sx={{ fontWeight: 700, color: textPrimary }}>{QURAN_RESEARCH_FILENAME}</Box>{" "}
-          in the current folder. Click a verse block to select it for <strong>removing tags</strong>{" "}
-          (remove is only enabled for the selected block). Click a tag to show only verses that share
-          that tag. Drag blocks to reorder when not filtering by tag.
+          in this folder. Select a block to remove tags; click a tag to filter; drag to reorder when
+          not filtering.
         </Typography>
 
         {!canEditReflections && githubToken && (
           <Alert
             severity="info"
-            sx={{ mb: 2, ...alertInfoSx }}
+            sx={{ ...alertInfoSx }}
           >
             You are signed in; verse lookup works. Saving to GitHub needs editor access (same as
             README edits).
           </Alert>
         )}
 
-        <Box
+        <Paper
+          elevation={0}
           sx={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 1,
-            alignItems: "center",
-            mb: 2,
+            p: 2,
+            borderRadius: 2,
+            bgcolor: "rgba(255,255,255,0.05)",
+            border: `1px solid ${borderStrong}`,
+            backdropFilter: "blur(8px)",
           }}
         >
+          <Typography variant="caption" sx={{ color: textMuted, textTransform: "uppercase", letterSpacing: "0.08em", mb: 1.5, display: "block" }}>
+            Fetch verses
+          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} flexWrap="wrap" useFlexGap alignItems={{ sm: "center" }}>
           <TextField
             size="small"
             label="Surah"
@@ -371,7 +402,7 @@ export default function QuranResearchDialog({
             value={surahInput}
             onChange={(e) => setSurahInput(e.target.value)}
             inputProps={{ min: 1, max: 114 }}
-            sx={fieldSx}
+            sx={{ ...fieldSx, minWidth: 100 }}
           />
           <TextField
             size="small"
@@ -380,7 +411,7 @@ export default function QuranResearchDialog({
             value={fromInput}
             onChange={(e) => setFromInput(e.target.value)}
             inputProps={{ min: 1 }}
-            sx={fieldSx}
+            sx={{ ...fieldSx, minWidth: 110 }}
           />
           <TextField
             size="small"
@@ -389,7 +420,7 @@ export default function QuranResearchDialog({
             value={toInput}
             onChange={(e) => setToInput(e.target.value)}
             inputProps={{ min: 1 }}
-            sx={fieldSx}
+            sx={{ ...fieldSx, minWidth: 110 }}
           />
           <Button
             variant="contained"
@@ -399,24 +430,28 @@ export default function QuranResearchDialog({
               bgcolor: "#2dd4bf",
               color: "#0f172a",
               fontWeight: 700,
-              "&:hover": { bgcolor: "#5eead4" },
+              px: 2.5,
+              borderRadius: 2,
+              boxShadow: "0 4px 20px rgba(45,212,191,0.35)",
+              "&:hover": { bgcolor: "#5eead4", boxShadow: "0 6px 24px rgba(45,212,191,0.45)" },
               "&.Mui-disabled": { bgcolor: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.4)" },
             }}
           >
             {fetching ? <CircularProgress size={22} sx={{ color: "#0f172a" }} /> : "Retrieve verses"}
           </Button>
           {loadingFile && (
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: { sm: 1 } }}>
               <CircularProgress size={20} sx={{ color: accentBright }} />
               <Typography variant="caption" sx={{ color: textSecondary }}>
                 Loading saved file…
               </Typography>
             </Box>
           )}
-        </Box>
+          </Stack>
+        </Paper>
 
         {allTags.length > 0 && (
-          <Box sx={{ mb: 2 }}>
+          <Box>
             <Typography variant="caption" sx={{ display: "block", mb: 0.75, color: textMuted }}>
               Tags (click to group verses; “Show all” clears)
             </Typography>
@@ -449,17 +484,28 @@ export default function QuranResearchDialog({
         )}
 
         {tagFilter && (
-          <Alert severity="warning" sx={{ mb: 2, ...alertWarningSx }}>
+          <Alert severity="warning" sx={{ ...alertWarningSx }}>
             Filtering by tag “{tagFilter}”. Drag-and-drop reorder is disabled. Choose “Show all
             verses” to edit order again.
           </Alert>
         )}
 
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Stack spacing={2}>
           {displayedItems.length === 0 && !loadingFile && (
-            <Typography variant="body2" sx={{ color: textMuted }}>
-              No verses yet. Enter surah and ayah range, then retrieve.
-            </Typography>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                textAlign: "center",
+                bgcolor: "rgba(255,255,255,0.04)",
+                border: `1px dashed ${borderStrong}`,
+                borderRadius: 2,
+              }}
+            >
+              <Typography variant="body2" sx={{ color: textMuted }}>
+                No verses yet. Enter surah and ayah range, then retrieve.
+              </Typography>
+            </Paper>
           )}
           {displayedItems.map(({ item }) => (
             <Paper
@@ -486,14 +532,17 @@ export default function QuranResearchDialog({
                 reorderById(fromId, item.id);
               }}
               sx={{
-                p: 2,
+                p: 2.5,
                 bgcolor:
-                  editingId === item.id ? "rgba(0, 191, 166, 0.18)" : "rgba(255,255,255,0.06)",
+                  editingId === item.id ? "rgba(94, 234, 212, 0.08)" : "rgba(255,255,255,0.04)",
                 border: "1px solid",
                 borderColor:
                   editingId === item.id ? accentBright : borderStrong,
+                borderLeft: `4px solid ${editingId === item.id ? accentBright : "rgba(94,234,212,0.45)"}`,
                 borderRadius: 2,
                 cursor: "pointer",
+                transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+                boxShadow: editingId === item.id ? "0 0 0 1px rgba(94,234,212,0.2)" : "none",
               }}
             >
               <Box
@@ -502,15 +551,40 @@ export default function QuranResearchDialog({
                   alignItems: "flex-start",
                   justifyContent: "space-between",
                   gap: 1,
-                  mb: 1,
+                  mb: 1.5,
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", flex: 1, minWidth: 0 }}>
                   {!tagFilter && (
                     <DragIndicatorIcon sx={{ color: textMuted, cursor: "grab" }} />
                   )}
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: accentBright }}>
-                    {refLabel(item)}
+                  <Typography
+                    component="span"
+                    dir="rtl"
+                    sx={{
+                      fontWeight: 800,
+                      color: accentBright,
+                      fontSize: "1.2rem",
+                      letterSpacing: "0.02em",
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {arabicSurahTitle(item)}
+                  </Typography>
+                  <Typography
+                    component="span"
+                    sx={{
+                      color: textSecondary,
+                      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                      fontSize: "0.8rem",
+                      bgcolor: "rgba(255,255,255,0.1)",
+                      px: 1,
+                      py: 0.35,
+                      borderRadius: 1,
+                      border: `1px solid ${borderMuted}`,
+                    }}
+                  >
+                    {verseAyahRange(item)}
                   </Typography>
                   {editingId === item.id && (
                     <Chip
@@ -571,11 +645,15 @@ export default function QuranResearchDialog({
                 component="div"
                 dir="rtl"
                 sx={{
-                  fontSize: "1.15rem",
-                  lineHeight: 1.9,
+                  fontSize: "1.18rem",
+                  lineHeight: 2,
                   mb: 1.5,
                   color: textPrimary,
                   whiteSpace: "pre-wrap",
+                  bgcolor: "rgba(0,0,0,0.2)",
+                  borderRadius: 1.5,
+                  px: 2,
+                  py: 1.5,
                 }}
               >
                 {item.text}
@@ -633,7 +711,8 @@ export default function QuranResearchDialog({
               </Box>
             </Paper>
           ))}
-        </Box>
+        </Stack>
+        </Stack>
       </DialogContent>
       <DialogActions
         sx={{
