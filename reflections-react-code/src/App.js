@@ -277,6 +277,8 @@ const LANGUAGE_OPTIONS = [
 const getLanguageMeta = (code) =>
   LANGUAGE_OPTIONS.find((l) => l.code === code) || LANGUAGE_OPTIONS[0];
 
+const RTL_LANGUAGE_CODES = new Set(["ar", "fa", "ur", "he"]);
+
 function App() {
   const readmeSectionMarkdownsRef = useRef([]);
   const [loadingChunks, setLoadingChunks] = useState(true);
@@ -335,6 +337,7 @@ function App() {
   const [youtubeSummaryOpen, setYoutubeSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [sourceMarkdownCache, setSourceMarkdownCache] = useState("");
+  const contentDirection = RTL_LANGUAGE_CODES.has(selectedLanguage) ? "rtl" : "ltr";
   const path = window.location.pathname;
   const normalizedPathSegments = getNormalizedPathSegments(path);
   const apiPath = normalizedPathSegments
@@ -1283,6 +1286,7 @@ Rules:
             selectedLanguage === "ar" || !translatedMarkdown ? null : translatedMarkdown
           }
           imageCaptionMap={selectedLanguage === "ar" ? null : translationImageCaptionMap}
+          contentDirection={contentDirection}
         />
       </Container>
 

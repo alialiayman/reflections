@@ -379,7 +379,8 @@ const DisplayReadme = ({
     canEditReflections,
     sectionMarkdownsRef,
     openImageModal,
-    overrideMarkdown
+    overrideMarkdown,
+    contentDirection = 'rtl'
 }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
@@ -1032,7 +1033,10 @@ const DisplayReadme = ({
                                 </div>
 
                                 {editingSectionIndex === idx ? (
-                                    <div className="markdown-content" style={{ paddingLeft: sectionToolsPaddingLeft }}>
+                                    <div
+                                        className="markdown-content"
+                                        style={{ paddingLeft: sectionToolsPaddingLeft, direction: contentDirection }}
+                                    >
                                         <Box
                                             sx={{
                                                 mb: 1.25,
@@ -1239,7 +1243,10 @@ const DisplayReadme = ({
                                         </Box>
                                     </div>
                                 ) : (
-                                    <div className="markdown-content" style={{ paddingLeft: sectionToolsPaddingLeft }}>
+                                    <div
+                                        className="markdown-content"
+                                        style={{ paddingLeft: sectionToolsPaddingLeft, direction: contentDirection }}
+                                    >
                                         <Markdown
                                             remarkPlugins={[remarkGfm]}
                                             components={{

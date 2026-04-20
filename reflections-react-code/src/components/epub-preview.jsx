@@ -2,7 +2,13 @@ import { CircularProgress, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { buildEpubLikePreview } from "../utils/epub-export";
 
-const EpubPreview = ({ path, images, sourceMarkdown, imageCaptionMap }) => {
+const EpubPreview = ({
+  path,
+  images,
+  sourceMarkdown,
+  imageCaptionMap,
+  contentDirection = "rtl",
+}) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sections, setSections] = useState([]);
@@ -60,7 +66,7 @@ const EpubPreview = ({ path, images, sourceMarkdown, imageCaptionMap }) => {
   }
 
   return (
-    <div className="markdown-content">
+    <div className="markdown-content" style={{ direction: contentDirection }}>
       {sections.map((section, index) => (
         <section
           key={`${section.heading}-${index}`}

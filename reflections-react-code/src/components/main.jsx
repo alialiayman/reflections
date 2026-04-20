@@ -27,6 +27,7 @@ export default function Main({
   openImageModal,
   sourceMarkdown,
   imageCaptionMap,
+  contentDirection = "rtl",
 }) {
   const path = window.location.pathname;
   const pathSegments = getNormalizedPathSegments(path);
@@ -50,6 +51,7 @@ export default function Main({
           images={images}
           sourceMarkdown={sourceMarkdown}
           imageCaptionMap={imageCaptionMap}
+          contentDirection={contentDirection}
         />
       ) : (
         <DisplayReadme
@@ -59,6 +61,7 @@ export default function Main({
           sectionMarkdownsRef={sectionMarkdownsRef}
           openImageModal={openImageModal}
           overrideMarkdown={sourceMarkdown}
+          contentDirection={contentDirection}
         />
       )}
       <Typography
