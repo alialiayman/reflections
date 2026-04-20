@@ -8,6 +8,7 @@ import LogoutIcon from "@mui/icons-material/Logout";
 import MenuBookIcon from "@mui/icons-material/MenuBook";
 import RecordVoiceOverIcon from "@mui/icons-material/RecordVoiceOver";
 import StopIcon from "@mui/icons-material/Stop";
+import SummarizeIcon from "@mui/icons-material/Summarize";
 import TranslateIcon from "@mui/icons-material/Translate";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import {
@@ -31,7 +32,6 @@ import {
 import { useState } from "react";
 import { OPENAI_TTS_VOICES } from "../constants/tts";
 import { useTts } from "../context/TtsContext";
-import { exportFolderToEpub } from "../utils/epub-export";
 
 const Header = ({
   handleCopy,
@@ -53,6 +53,13 @@ const Header = ({
   onSignOutGithub,
   onDownloadReadmeMarkdown,
   onOpenQuranResearch,
+  onExportEpub,
+  selectedLanguage,
+  languageOptions = [],
+  onChangeLanguage,
+  translationLoading,
+  onGenerateYoutubeSummary,
+  summaryLoading,
   ...props
 }) => {
   const theme = useTheme();
@@ -76,17 +83,14 @@ const Header = ({
     severity: "success",
   });
 
-  const handleTranslate = () => {
-    const url = `https://a--reflections-web-app.translate.goog${
-      path === "/" ? "" : path
-    }?_x_tr_sl=ar&_x_tr_tl=en&_x_tr_hl=en&_x_tr_pto=wapp`;
-    window.open(url, "_blank");
-  };
-
   const handleExportEpub = async () => {
     try {
       setExportingEpub(true);
-      await exportFolderToEpub({ path, images });
+      if (typeof onExportEpub === "function") {
+        await onExportEpub({ path, images });
+      } else {
+        throw new Error("EPUB export handler is unavailable.");
+      }
       setEpubToast({
         open: true,
         message: "EPUB exported successfully",
@@ -205,15 +209,62 @@ const Header = ({
                 </span>
               </Tooltip>
             )}
-            <Tooltip title="Translate to English (Google Translate)">
-              <IconButton
-                color="inherit"
-                onClick={handleTranslate}
-                aria-label="Translate to English"
-                sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+            <FormControl
+              size="small"
+              sx={{
+                minWidth: { xs: 98, sm: 118 },
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "rgba(164, 180, 148, 0.45)",
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: "rgba(164, 180, 148, 0.75)",
+                },
+                "& .MuiSvgIcon-root": { color: "#d6dfcc" },
+              }}
+            >
+              <Select
+                value={selectedLanguage || "ar"}
+                onChange={(e) => onChangeLanguage?.(e.target.value)}
+                displayEmpty
+                startAdornment={<TranslateIcon fontSize="small" sx={{ mr: 0.75, opacity: 0.85 }} />}
+                inputProps={{ "aria-label": "Content language" }}
+                sx={{
+                  color: "#e8f0e8",
+                  fontSize: "0.78rem",
+                  height: 36,
+                  "& .MuiSelect-select": {
+                    py: 0.65,
+                    display: "flex",
+                    alignItems: "center",
+                  },
+                }}
               >
-                <TranslateIcon />
-              </IconButton>
+                {languageOptions.map((lang) => (
+                  <MenuItem key={lang.code} value={lang.code} dense>
+                    {lang.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {translationLoading && (
+              <CircularProgress size={18} color="inherit" sx={{ opacity: 0.9 }} />
+            )}
+            <Tooltip title="Generate YouTube-ready summary">
+              <span>
+                <IconButton
+                  color="inherit"
+                  onClick={onGenerateYoutubeSummary}
+                  disabled={summaryLoading || translationLoading}
+                  aria-label="Generate YouTube summary"
+                  sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                >
+                  {summaryLoading ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    <SummarizeIcon />
+                  )}
+                </IconButton>
+              </span>
             </Tooltip>
             <Tooltip
               title={

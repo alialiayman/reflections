@@ -25,6 +25,8 @@ export default function Main({
   canEditReflections,
   sectionMarkdownsRef,
   openImageModal,
+  sourceMarkdown,
+  imageCaptionMap,
 }) {
   const path = window.location.pathname;
   const pathSegments = getNormalizedPathSegments(path);
@@ -43,7 +45,12 @@ export default function Main({
   return (
     <div id="readme">
       {previewMode ? (
-        <EpubPreview path={canonicalPath} images={images} />
+        <EpubPreview
+          path={canonicalPath}
+          images={images}
+          sourceMarkdown={sourceMarkdown}
+          imageCaptionMap={imageCaptionMap}
+        />
       ) : (
         <DisplayReadme
           path={canonicalPath}
@@ -51,6 +58,7 @@ export default function Main({
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={sectionMarkdownsRef}
           openImageModal={openImageModal}
+          overrideMarkdown={sourceMarkdown}
         />
       )}
       <Typography

@@ -6,6 +6,7 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DeleteSweepIcon from "@mui/icons-material/DeleteSweep";
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import SaveIcon from "@mui/icons-material/Save";
+import SearchIcon from "@mui/icons-material/Search";
 import {
   Alert,
   Box,
@@ -17,6 +18,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  LinearProgress,
   Paper,
   Stack,
   TextField,
@@ -25,7 +27,7 @@ import {
 } from "@mui/material";
 import axios from "axios";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchVerseRange } from "../utils/quran-api";
+import { fetchSurahUthmani, fetchVerseRange, searchQuranWord } from "../utils/quran-api";
 import { githubBase64ToUtf8, utf8ToBase64 } from "../utils/github-text-encoding";
 import { suggestQuranTags } from "../utils/openai-quran-tags";
 import {
@@ -71,6 +73,13 @@ export default function QuranResearchDialog({
   const [surahInput, setSurahInput] = useState("1");
   const [fromInput, setFromInput] = useState("1");
   const [toInput, setToInput] = useState("1");
+
+  const [wordSearchQuery, setWordSearchQuery] = useState("");
+  const [wordSearchLoading, setWordSearchLoading] = useState(false);
+  const [wordSearchProgress, setWordSearchProgress] = useState(null);
+  const [wordSearchMode, setWordSearchMode] = useState(null);
+  const [wordSearchHits, setWordSearchHits] = useState([]);
+  const wordSearchAbortRef = useRef(null);
 
   const [editingId, setEditingId] = useState(null);
   const [tagFilter, setTagFilter] = useState(null);
@@ -145,6 +154,103 @@ export default function QuranResearchDialog({
     };
   }, [open, githubToken, contentsUrl]);
 
+  useEffect(() => {
+    if (open) {
+      return undefined;
+    }
+    wordSearchAbortRef.current?.abort();
+    wordSearchAbortRef.current = null;
+    setWordSearchHits([]);
+    setWordSearchMode(null);
+    setWordSearchProgress(null);
+    setWordSearchLoading(false);
+    return undefined;
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const pending = wordSearchHits.filter((h) => h.preview?.loading);
+    if (!pending.length) {
+      return undefined;
+    }
+    const cancelledRef = { current: false };
+    const batchSize = 6;
+    const run = async () => {
+      for (let i = 0; i < pending.length; i += batchSize) {
+        if (cancelledRef.current) {
+          return;
+        }
+        const slice = pending.slice(i, i + batchSize);
+        await Promise.all(
+          slice.map(async (h) => {
+            try {
+              const meta = await fetchSurahUthmani(h.surah);
+              if (cancelledRef.current) {
+                return;
+              }
+              const maxAyah = meta.numberOfAyahs;
+              const from = Math.max(1, h.center - h.before);
+              const to = Math.min(maxAyah, h.center + h.after);
+              const result = await fetchVerseRange(h.surah, from, to);
+              if (cancelledRef.current) {
+                return;
+              }
+              setWordSearchHits((prev) =>
+                prev.map((x) =>
+                  x.id === h.id &&
+                  x.before === h.before &&
+                  x.after === h.after &&
+                  x.center === h.center
+                    ? {
+                        ...x,
+                        preview: {
+                          loading: false,
+                          text: result.text,
+                          from,
+                          to,
+                          error: null,
+                        },
+                      }
+                    : x
+                )
+              );
+            } catch (e) {
+              if (cancelledRef.current) {
+                return;
+              }
+              const msg = e instanceof Error ? e.message : "Failed to load preview";
+              setWordSearchHits((prev) =>
+                prev.map((x) =>
+                  x.id === h.id &&
+                  x.before === h.before &&
+                  x.after === h.after &&
+                  x.center === h.center
+                    ? {
+                        ...x,
+                        preview: {
+                          loading: false,
+                          text: "",
+                          from: null,
+                          to: null,
+                          error: msg,
+                        },
+                      }
+                    : x
+                )
+              );
+            }
+          })
+        );
+      }
+    };
+    run();
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [open, wordSearchHits]);
+
   const allTags = useMemo(() => {
     const s = new Set();
     items.forEach((it) => it.tags.forEach((t) => s.add(t)));
@@ -193,6 +299,146 @@ export default function QuranResearchDialog({
       setFetching(false);
     }
   };
+
+  const handleWordSearch = useCallback(async () => {
+    const q = wordSearchQuery.trim();
+    if (!q) {
+      notify("Enter a word or phrase to search.", "warning");
+      return;
+    }
+    wordSearchAbortRef.current?.abort();
+    const ac = new AbortController();
+    wordSearchAbortRef.current = ac;
+    setWordSearchLoading(true);
+    setWordSearchProgress(null);
+    setWordSearchHits([]);
+    setWordSearchMode(null);
+    try {
+      const { mode, hits } = await searchQuranWord(q, {
+        maxResults: 80,
+        signal: ac.signal,
+        onProgress: (done, total) => {
+          setWordSearchProgress({ done, total });
+        },
+      });
+      if (ac.signal.aborted) {
+        return;
+      }
+      setWordSearchMode(mode);
+      const valid = (hits || []).filter(
+        (h) =>
+          Number.isInteger(h.surah) &&
+          h.surah >= 1 &&
+          h.surah <= 114 &&
+          Number.isInteger(h.numberInSurah)
+      );
+      if (!valid.length) {
+        notify("No matches found.", "info");
+        return;
+      }
+      const baseId = Date.now();
+      setWordSearchHits(
+        valid.map((h, idx) => ({
+          id: `ws-${baseId}-${idx}-${h.surah}-${h.numberInSurah}`,
+          surah: h.surah,
+          center: h.numberInSurah,
+          snippet: h.snippet || "",
+          before: 2,
+          after: 2,
+          preview: {
+            loading: true,
+            text: "",
+            from: null,
+            to: null,
+            error: null,
+          },
+        }))
+      );
+      notify(
+        `Found ${valid.length} match${valid.length === 1 ? "" : "es"}. Adjust context, then add to study.`,
+        "success"
+      );
+    } catch (e) {
+      if (e?.name === "AbortError") {
+        return;
+      }
+      notify(e instanceof Error ? e.message : "Search failed.", "error");
+    } finally {
+      setWordSearchLoading(false);
+      setWordSearchProgress(null);
+      wordSearchAbortRef.current = null;
+    }
+  }, [wordSearchQuery, notify]);
+
+  const adjustWordSearchContext = useCallback((id, deltaBefore, deltaAfter) => {
+    setWordSearchHits((prev) =>
+      prev.map((h) => {
+        if (h.id !== id) {
+          return h;
+        }
+        const nb = Math.max(0, h.before + deltaBefore);
+        const na = Math.max(0, h.after + deltaAfter);
+        if (nb === h.before && na === h.after) {
+          return h;
+        }
+        return {
+          ...h,
+          before: nb,
+          after: na,
+          preview: { ...h.preview, loading: true, error: null },
+        };
+      })
+    );
+  }, []);
+
+  const clearWordSearchResults = useCallback(() => {
+    wordSearchAbortRef.current?.abort();
+    wordSearchAbortRef.current = null;
+    setWordSearchHits([]);
+    setWordSearchMode(null);
+    setWordSearchProgress(null);
+    setWordSearchLoading(false);
+  }, []);
+
+  const handleAddWordSearchRange = useCallback(
+    async (hit) => {
+      const from = hit.preview?.from;
+      const to = hit.preview?.to;
+      if (hit.preview?.loading) {
+        notify("Still loading this preview…", "info");
+        return;
+      }
+      if (hit.preview?.error || from == null || to == null) {
+        notify("Cannot add this range yet.", "warning");
+        return;
+      }
+      setFetching(true);
+      try {
+        const result = await fetchVerseRange(hit.surah, from, to);
+        setItems((prev) => [
+          ...prev,
+          {
+            id: newItemId(),
+            surah: result.surah,
+            from: result.start,
+            to: result.end,
+            text: result.text,
+            tags: [],
+            arabicName: result.arabicName || getArabicSurahName(result.surah),
+          },
+        ]);
+        notify(
+          `Added ${result.arabicName || getArabicSurahName(result.surah)} (${result.surah}:${from}–${to}) to study.`,
+          "success"
+        );
+      } catch (e) {
+        notify(e instanceof Error ? e.message : "Failed to add verses.", "error");
+      } finally {
+        setFetching(false);
+      }
+    },
+    [notify]
+  );
 
   const handleClearAllVerses = () => {
     if (items.length === 0) {
@@ -497,6 +743,293 @@ export default function QuranResearchDialog({
             </Box>
           )}
           </Stack>
+        </Paper>
+
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            borderRadius: 2,
+            bgcolor: "rgba(255,255,255,0.04)",
+            border: `1px dashed ${borderStrong}`,
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              color: textMuted,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              mb: 1.5,
+              display: "block",
+            }}
+          >
+            Word search (temporary preview)
+          </Typography>
+          <Typography variant="body2" sx={{ color: textSecondary, mb: 1.5, lineHeight: 1.65 }}>
+            Arabic queries scan the Uthmani text surah by surah (first full scan can take about a minute;
+            later searches reuse cache). Latin names use the English translation search (e.g. “Mohamed”
+            is tried as “Muhammad” / “Mohammed” too); previews are always Arabic. In DevTools you will see
+            <Box component="span" sx={{ fontWeight: 600, color: textPrimary }}>quran-uthmani</Box> requests
+            — those load whole surahs for text, not a separate “search” URL. Use +↑ / −↑ / +↓ / −↓ for one
+            ayah of context, then add the range to your study list.
+          </Typography>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.5}
+            flexWrap="wrap"
+            useFlexGap
+            alignItems={{ sm: "center" }}
+          >
+            <TextField
+              size="small"
+              label="Word or phrase"
+              value={wordSearchQuery}
+              onChange={(e) => setWordSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleWordSearch();
+                }
+              }}
+              sx={{ ...fieldSx, minWidth: 220, flex: { sm: "1 1 220px" } }}
+            />
+            <Button
+              variant="contained"
+              startIcon={
+                wordSearchLoading ? undefined : <SearchIcon sx={{ color: "#f8fafc" }} />
+              }
+              disabled={wordSearchLoading || fetching}
+              onClick={handleWordSearch}
+              sx={{
+                bgcolor: "#6366f1",
+                color: "#f8fafc",
+                fontWeight: 700,
+                px: 2,
+                borderRadius: 2,
+                "&:hover": { bgcolor: "#818cf8" },
+                "&.Mui-disabled": {
+                  bgcolor: "rgba(255,255,255,0.12)",
+                  color: "rgba(255,255,255,0.4)",
+                },
+              }}
+            >
+              {wordSearchLoading ? (
+                <CircularProgress size={22} sx={{ color: "#f8fafc" }} />
+              ) : (
+                "Search"
+              )}
+            </Button>
+            <Button
+              variant="outlined"
+              disabled={!wordSearchLoading && wordSearchHits.length === 0}
+              onClick={clearWordSearchResults}
+              sx={outlinedButtonLightSx}
+            >
+              Clear search
+            </Button>
+          </Stack>
+          {wordSearchLoading && wordSearchProgress && (
+            <Box sx={{ mt: 1.5 }}>
+              <LinearProgress
+                variant="determinate"
+                value={Math.min(100, (wordSearchProgress.done / wordSearchProgress.total) * 100)}
+                sx={{
+                  height: 6,
+                  borderRadius: 3,
+                  bgcolor: "rgba(255,255,255,0.08)",
+                  "& .MuiLinearProgress-bar": { bgcolor: accentBright },
+                }}
+              />
+              <Typography variant="caption" sx={{ color: textMuted, mt: 0.5, display: "block" }}>
+                Scanning Quran text… surahs through {wordSearchProgress.done} / {wordSearchProgress.total}
+              </Typography>
+            </Box>
+          )}
+          {wordSearchMode && wordSearchHits.length > 0 && (
+            <Typography variant="caption" sx={{ color: textMuted, mt: 1, display: "block" }}>
+              Mode: {wordSearchMode === "uthmani" ? "Arabic (Uthmani)" : "Translation index (English)"} · up
+              to 80 matches
+            </Typography>
+          )}
+          {wordSearchHits.length > 0 && (
+            <Box
+              sx={{
+                mt: 2,
+                maxHeight: 380,
+                overflowY: "auto",
+                pr: 0.5,
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.5,
+              }}
+            >
+              {wordSearchHits.map((hit) => (
+                <Paper
+                  key={hit.id}
+                  elevation={0}
+                  sx={{
+                    p: 1.75,
+                    bgcolor: "rgba(0,0,0,0.25)",
+                    border: `1px solid ${borderMuted}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    flexWrap="wrap"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    gap={1}
+                    sx={{ mb: 1 }}
+                  >
+                    <Typography
+                      component="span"
+                      sx={{
+                        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                        fontSize: "0.8rem",
+                        color: accentBright,
+                        fontWeight: 700,
+                      }}
+                    >
+                      {hit.surah}:{hit.preview?.from ?? "…"}–{hit.preview?.to ?? "…"} (hit ayah{" "}
+                      {hit.surah}:{hit.center})
+                    </Typography>
+                    <Stack direction="row" flexWrap="wrap" gap={0.5} alignItems="center">
+                      <Tooltip title="Include one more verse above">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => adjustWordSearchContext(hit.id, 1, 0)}
+                          sx={{
+                            ...outlinedButtonLightSx,
+                            minWidth: 0,
+                            px: 1,
+                            py: 0.25,
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          +↑
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="Include one fewer verse above">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => adjustWordSearchContext(hit.id, -1, 0)}
+                          sx={{
+                            ...outlinedButtonLightSx,
+                            minWidth: 0,
+                            px: 1,
+                            py: 0.25,
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          −↑
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="Include one more verse below">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => adjustWordSearchContext(hit.id, 0, 1)}
+                          sx={{
+                            ...outlinedButtonLightSx,
+                            minWidth: 0,
+                            px: 1,
+                            py: 0.25,
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          +↓
+                        </Button>
+                      </Tooltip>
+                      <Tooltip title="Include one fewer verse below">
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => adjustWordSearchContext(hit.id, 0, -1)}
+                          sx={{
+                            ...outlinedButtonLightSx,
+                            minWidth: 0,
+                            px: 1,
+                            py: 0.25,
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          −↓
+                        </Button>
+                      </Tooltip>
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={
+                          fetching ||
+                          hit.preview?.loading ||
+                          !!hit.preview?.error ||
+                          hit.preview?.from == null ||
+                          hit.preview?.to == null
+                        }
+                        onClick={() => handleAddWordSearchRange(hit)}
+                        sx={{
+                          ml: { sm: 0.5 },
+                          bgcolor: "#2dd4bf",
+                          color: "#0f172a",
+                          fontWeight: 700,
+                          "&:hover": { bgcolor: "#5eead4" },
+                          "&.Mui-disabled": {
+                            bgcolor: "rgba(255,255,255,0.12)",
+                            color: "rgba(255,255,255,0.4)",
+                          },
+                        }}
+                      >
+                        Add range to study
+                      </Button>
+                    </Stack>
+                  </Stack>
+                  {hit.snippet && wordSearchMode === "translation" && (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: textMuted, display: "block", mb: 1, fontStyle: "italic" }}
+                    >
+                      {hit.snippet.length > 200 ? `${hit.snippet.slice(0, 200)}…` : hit.snippet}
+                    </Typography>
+                  )}
+                  {hit.preview?.loading && (
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, py: 1 }}>
+                      <CircularProgress size={20} sx={{ color: accentBright }} />
+                      <Typography variant="body2" sx={{ color: textSecondary }}>
+                        Loading Uthmani preview…
+                      </Typography>
+                    </Box>
+                  )}
+                  {hit.preview?.error && (
+                    <Alert severity="error" sx={{ mt: 1, py: 0.5, ...alertErrorSx }}>
+                      {hit.preview.error}
+                    </Alert>
+                  )}
+                  {!hit.preview?.loading && !hit.preview?.error && hit.preview?.text && (
+                    <Typography
+                      component="div"
+                      dir="rtl"
+                      sx={{
+                        fontSize: "1.05rem",
+                        lineHeight: 2,
+                        color: textPrimary,
+                        whiteSpace: "pre-wrap",
+                        bgcolor: "rgba(0,0,0,0.2)",
+                        borderRadius: 1.5,
+                        px: 2,
+                        py: 1.5,
+                      }}
+                    >
+                      {hit.preview.text}
+                    </Typography>
+                  )}
+                </Paper>
+              ))}
+            </Box>
+          )}
         </Paper>
 
         {allTags.length > 0 && (
@@ -872,6 +1405,14 @@ const alertWarningSx = {
   color: textPrimary,
   border: "1px solid rgba(251, 191, 36, 0.45)",
   "& .MuiAlert-icon": { color: "#fcd34d" },
+  "& .MuiAlert-message": { color: textPrimary },
+};
+
+const alertErrorSx = {
+  bgcolor: "rgba(248, 113, 113, 0.12)",
+  color: textPrimary,
+  border: "1px solid rgba(248, 113, 113, 0.45)",
+  "& .MuiAlert-icon": { color: "#fca5a5" },
   "& .MuiAlert-message": { color: textPrimary },
 };
 

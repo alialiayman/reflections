@@ -372,7 +372,15 @@ const FolderListTableCell = ({ children, ...props }) => {
 };
 
 
-const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditReflections, sectionMarkdownsRef, openImageModal }) => {
+const DisplayReadme = ({
+    path,
+    filename = 'README.md',
+    githubToken,
+    canEditReflections,
+    sectionMarkdownsRef,
+    openImageModal,
+    overrideMarkdown
+}) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
     const [editingSectionIndex, setEditingSectionIndex] = useState(null);
@@ -411,6 +419,14 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
     }, [sections, sectionMarkdownsRef]);
 
     useEffect(() => {
+        if (typeof overrideMarkdown === 'string') {
+            const markdownText = overrideMarkdown;
+            const firstHeading = extractFirstHeadingText(markdownText);
+            document.title = firstHeading || filename;
+            splitSections(markdownText);
+            setError(null);
+            return;
+        }
         if (path && filename) {
             const url = `${GITHUB}${path.endsWith('/') ? path : path + '/'}${filename}`;
             setError(null);
@@ -451,7 +467,7 @@ const DisplayReadme = ({ path, filename = 'README.md', githubToken, canEditRefle
         } else {
             setError('No path or filename provided');
         }
-    }, [path, filename]);
+    }, [path, filename, overrideMarkdown]);
 
     const splitSections = (markdownText) => {
         const lines = markdownText.split('\n');

@@ -2,7 +2,7 @@ import { CircularProgress, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { buildEpubLikePreview } from "../utils/epub-export";
 
-const EpubPreview = ({ path, images }) => {
+const EpubPreview = ({ path, images, sourceMarkdown, imageCaptionMap }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [sections, setSections] = useState([]);
@@ -15,7 +15,12 @@ const EpubPreview = ({ path, images }) => {
         setLoading(true);
         setError(null);
 
-        const preview = await buildEpubLikePreview({ path, images });
+        const preview = await buildEpubLikePreview({
+          path,
+          images,
+          sourceMarkdown,
+          imageCaptionMap,
+        });
         if (!active) {
           return;
         }
@@ -40,7 +45,7 @@ const EpubPreview = ({ path, images }) => {
     return () => {
       active = false;
     };
-  }, [path, images]);
+  }, [path, images, sourceMarkdown, imageCaptionMap]);
 
   if (loading) {
     return (

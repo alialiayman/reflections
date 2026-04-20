@@ -14,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import SendIcon from "@mui/icons-material/Send";
 import axios from "axios";
@@ -23,6 +24,7 @@ import Header from "./components/header";
 import Main from "./components/main";
 import QuranResearchDialog from "./components/QuranResearchDialog";
 import { GITHUB, getVisionKey } from "./constants";
+import { exportFolderToEpub, fetchReadmeMarkdownForRendering } from "./utils/epub-export";
 import {
   isGithubAuthConfigured,
   onGithubAuthChanged,
@@ -254,6 +256,26 @@ function getCopyLimitFromQuery() {
 
 const COPY_LIMIT = getCopyLimitFromQuery();
 const REFERENCE_LINK = "\nhttps://a-reflections.web.app";
+const QURAN_TRANSLATION_DISCLAIMER =
+  "> **Quranic translation note:** Any English rendering here is a meaning-based interpretation for readability, not a verbatim or authoritative tafsir translation. For precise theological study, refer to classical Arabic tafsir and multiple trusted translations.";
+
+const LANGUAGE_OPTIONS = [
+  { code: "ar", label: "Arabic (original)", openaiLabel: "Arabic", epubLanguage: "ar" },
+  { code: "en", label: "English", openaiLabel: "English", epubLanguage: "en" },
+  { code: "fr", label: "French", openaiLabel: "French", epubLanguage: "fr" },
+  { code: "es", label: "Spanish", openaiLabel: "Spanish", epubLanguage: "es" },
+  { code: "de", label: "German", openaiLabel: "German", epubLanguage: "de" },
+  { code: "pt", label: "Portuguese", openaiLabel: "Portuguese", epubLanguage: "pt" },
+  { code: "tr", label: "Turkish", openaiLabel: "Turkish", epubLanguage: "tr" },
+  { code: "id", label: "Indonesian", openaiLabel: "Indonesian", epubLanguage: "id" },
+  { code: "ur", label: "Urdu", openaiLabel: "Urdu", epubLanguage: "ur" },
+  { code: "ru", label: "Russian", openaiLabel: "Russian", epubLanguage: "ru" },
+  { code: "zh", label: "Chinese (Simplified)", openaiLabel: "Simplified Chinese", epubLanguage: "zh" },
+  { code: "hi", label: "Hindi", openaiLabel: "Hindi", epubLanguage: "hi" },
+];
+
+const getLanguageMeta = (code) =>
+  LANGUAGE_OPTIONS.find((l) => l.code === code) || LANGUAGE_OPTIONS[0];
 
 function App() {
   const readmeSectionMarkdownsRef = useRef([]);
@@ -305,6 +327,14 @@ function App() {
     severity: "info",
   });
   const [quranResearchOpen, setQuranResearchOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("ar");
+  const [translatedMarkdown, setTranslatedMarkdown] = useState("");
+  const [translationLoading, setTranslationLoading] = useState(false);
+  const [translationImageCaptionMap, setTranslationImageCaptionMap] = useState({});
+  const [youtubeSummary, setYoutubeSummary] = useState("");
+  const [youtubeSummaryOpen, setYoutubeSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [sourceMarkdownCache, setSourceMarkdownCache] = useState("");
   const path = window.location.pathname;
   const normalizedPathSegments = getNormalizedPathSegments(path);
   const apiPath = normalizedPathSegments
@@ -449,6 +479,13 @@ function App() {
 
     fetchImages();
   }, [apiPath]);
+
+  useEffect(() => {
+    setSourceMarkdownCache("");
+    setTranslatedMarkdown("");
+    setTranslationImageCaptionMap({});
+    setSelectedLanguage("ar");
+  }, [path]);
 
   useEffect(() => {
     const readmeDiv = document.getElementById("readme");
@@ -961,6 +998,231 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
     });
   };
 
+  const loadSourceMarkdown = async () => {
+    if (sourceMarkdownCache.trim()) {
+      return sourceMarkdownCache;
+    }
+    const markdown = await fetchReadmeMarkdownForRendering({ path });
+    setSourceMarkdownCache(markdown);
+    return markdown;
+  };
+
+  const buildTranslationPrompt = (targetLanguageLabel) => `
+Translate the following Arabic README markdown into ${targetLanguageLabel}.
+
+Constraints:
+- Output valid markdown only (no code fences, no explanations).
+- Keep all markdown structure (headings, lists, tables, links).
+- Keep image markdown paths unchanged.
+- Style: academic, clear, and engaging like a high-quality book.
+- For Quranic text:
+  1) Keep the original Arabic Quranic text line(s).
+  2) Add a meaning-based translation (not literal word-by-word).
+  3) Keep the intended meaning and avoid over-assertive theological interpretation.
+  4) Include this disclaimer exactly once near the beginning of the document:
+${QURAN_TRANSLATION_DISCLAIMER}
+
+Markdown:
+`.trim();
+
+  const buildCaptionTranslationPrompt = (targetLanguageLabel) => `
+Translate these image captions into ${targetLanguageLabel}.
+Return JSON only with shape: {"captions":[{"source":"...","translated":"..."}]}
+Rules:
+- Keep concise, human, book-ready caption style.
+- Do not include numbering prefixes; source strings already exclude numbers.
+- No extra keys, no commentary.
+`.trim();
+
+  const translateMarkdownWithOpenAi = async (markdown, languageCode) => {
+    if (languageCode === "ar") {
+      return markdown;
+    }
+    const lang = getLanguageMeta(languageCode);
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getVisionKey()}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        temperature: 0.35,
+        max_tokens: 16000,
+        messages: [
+          { role: "system", content: "You are an expert literary translator for Arabic nonfiction books." },
+          { role: "user", content: `${buildTranslationPrompt(lang.openaiLabel)}\n\n${markdown}` },
+        ],
+      }),
+    });
+    const data = await res.json();
+    const translated = data?.choices?.[0]?.message?.content?.trim();
+    if (!res.ok || !translated) {
+      throw new Error(data?.error?.message || "Translation failed.");
+    }
+    return translated;
+  };
+
+  const translateImageCaptionsWithOpenAi = async (languageCode) => {
+    if (languageCode === "ar") {
+      return {};
+    }
+    const captions = images
+      .map((img) => {
+        const stem = getFileNameParts(img.name).stem;
+        return splitNumericPrefix(stem).baseName || FALLBACK_IMAGE_NAME;
+      })
+      .filter(Boolean);
+    if (!captions.length) {
+      return {};
+    }
+    const lang = getLanguageMeta(languageCode);
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getVisionKey()}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "You return strict JSON only." },
+          {
+            role: "user",
+            content: `${buildCaptionTranslationPrompt(lang.openaiLabel)}\n\n${JSON.stringify(captions)}`,
+          },
+        ],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error?.message || "Caption translation failed.");
+    }
+    const raw = data?.choices?.[0]?.message?.content || "{}";
+    let parsed = {};
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+    const map = {};
+    const rows = Array.isArray(parsed?.captions) ? parsed.captions : [];
+    rows.forEach((row) => {
+      const src = String(row?.source || "").trim();
+      const tr = String(row?.translated || "").trim();
+      if (src && tr) {
+        map[src] = tr;
+      }
+    });
+    return map;
+  };
+
+  const applyLanguage = async (languageCode) => {
+    const previousLanguage = selectedLanguage;
+    setSelectedLanguage(languageCode);
+    if (languageCode === "ar") {
+      setTranslatedMarkdown("");
+      setTranslationImageCaptionMap({});
+      return;
+    }
+    setTranslationLoading(true);
+    try {
+      const source = await loadSourceMarkdown();
+      const [translated, captionMap] = await Promise.all([
+        translateMarkdownWithOpenAi(source, languageCode),
+        translateImageCaptionsWithOpenAi(languageCode),
+      ]);
+      setTranslatedMarkdown(translated);
+      setTranslationImageCaptionMap(captionMap);
+      setCopyToast({
+        open: true,
+        message: `Translated to ${getLanguageMeta(languageCode).label}.`,
+        severity: "success",
+      });
+    } catch (e) {
+      setSelectedLanguage(previousLanguage);
+      setCopyToast({
+        open: true,
+        message: e instanceof Error ? e.message : "Translation failed.",
+        severity: "error",
+      });
+    } finally {
+      setTranslationLoading(false);
+    }
+  };
+
+  const handleExportEpubWithLanguage = async ({ path: exportPath, images: exportImages }) => {
+    const lang = getLanguageMeta(selectedLanguage);
+    let sourceMarkdown = await loadSourceMarkdown();
+    let captionMap = null;
+    if (selectedLanguage !== "ar") {
+      sourceMarkdown =
+        translatedMarkdown || (await translateMarkdownWithOpenAi(sourceMarkdown, selectedLanguage));
+      captionMap =
+        Object.keys(translationImageCaptionMap || {}).length > 0
+          ? translationImageCaptionMap
+          : await translateImageCaptionsWithOpenAi(selectedLanguage);
+    }
+    await exportFolderToEpub({
+      path: exportPath,
+      images: exportImages,
+      sourceMarkdown,
+      language: lang.epubLanguage,
+      imageCaptionMap: captionMap,
+    });
+  };
+
+  const handleGenerateYoutubeSummary = async () => {
+    setSummaryLoading(true);
+    try {
+      const lang = getLanguageMeta(selectedLanguage);
+      const source =
+        selectedLanguage === "ar"
+          ? await loadSourceMarkdown()
+          : translatedMarkdown || (await loadSourceMarkdown());
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getVisionKey()}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          temperature: 0.45,
+          max_tokens: 1200,
+          messages: [
+            {
+              role: "system",
+              content:
+                "Write compelling YouTube-ready descriptions. Be concise, vivid, and informative. Include a short hook, key insights bullets, and hashtags.",
+            },
+            {
+              role: "user",
+              content: `Create a YouTube-ready summary in ${lang.openaiLabel} for this article markdown:\n\n${source}`,
+            },
+          ],
+        }),
+      });
+      const data = await res.json();
+      const summary = data?.choices?.[0]?.message?.content?.trim();
+      if (!res.ok || !summary) {
+        throw new Error(data?.error?.message || "Summary generation failed.");
+      }
+      setYoutubeSummary(summary);
+      setYoutubeSummaryOpen(true);
+    } catch (e) {
+      setCopyToast({
+        open: true,
+        message: e instanceof Error ? e.message : "Summary generation failed.",
+        severity: "error",
+      });
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
   return (
     <TtsProvider
       getApiKey={getVisionKey}
@@ -989,6 +1251,13 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
         onSignOutGithub={handleSignOutGithub}
         onDownloadReadmeMarkdown={handleDownloadFullReadmeMarkdown}
         onOpenQuranResearch={() => setQuranResearchOpen(true)}
+        selectedLanguage={selectedLanguage}
+        languageOptions={LANGUAGE_OPTIONS}
+        onChangeLanguage={applyLanguage}
+        translationLoading={translationLoading}
+        onGenerateYoutubeSummary={handleGenerateYoutubeSummary}
+        summaryLoading={summaryLoading}
+        onExportEpub={handleExportEpubWithLanguage}
       />
       <QuranResearchDialog
         open={quranResearchOpen}
@@ -1010,8 +1279,47 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={readmeSectionMarkdownsRef}
           openImageModal={handleClickOpen}
+          sourceMarkdown={
+            selectedLanguage === "ar" || !translatedMarkdown ? null : translatedMarkdown
+          }
+          imageCaptionMap={selectedLanguage === "ar" ? null : translationImageCaptionMap}
         />
       </Container>
+
+      <Dialog
+        open={youtubeSummaryOpen}
+        onClose={() => setYoutubeSummaryOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogContent sx={{ pt: 3 }}>
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            YouTube summary ({getLanguageMeta(selectedLanguage).label})
+          </Typography>
+          <TextField
+            fullWidth
+            multiline
+            minRows={10}
+            value={youtubeSummary}
+            InputProps={{ readOnly: true }}
+          />
+          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1.5 }}>
+            <Button
+              startIcon={<ContentCopyIcon />}
+              onClick={() => {
+                navigator.clipboard?.writeText(youtubeSummary || "");
+                setCopyToast({
+                  open: true,
+                  message: "Summary copied.",
+                  severity: "success",
+                });
+              }}
+            >
+              Copy summary
+            </Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal for Enlarged Image */}
       <Dialog

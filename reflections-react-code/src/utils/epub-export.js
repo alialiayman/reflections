@@ -5,6 +5,15 @@ import { marked } from "marked";
 import { GITHUB } from "../constants";
 import { addH2SequencesToSections } from "./markdown-section-h2";
 
+const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
+const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
+const REPO_CONTENTS_API_BASE =
+  "https://api.github.com/repos/alialiayman/reflections/contents";
+const FOLDER_LIST_FALLBACK = "⚠️ تعذر تحميل قائمة المجلدات من GitHub حالياً.";
+const FOLDER_SUBTITLE_TOKEN = "[[FOLDER_SUBTITLE]]";
+const FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/gi;
+const EXCLUDED_FOLDER_NAMES = new Set(["reflections-react-code"]);
+
 const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
@@ -185,12 +194,21 @@ const mapImagesToSections = (images, sectionsCount) => {
   });
 };
 
-const buildSectionImageFigureHtml = (image) =>
+const getImageCaption = (image, imageCaptionMap = null) => {
+  const base =
+    stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
+    fileNameWithoutExtension(image.name);
+  if (!imageCaptionMap) {
+    return base;
+  }
+  return imageCaptionMap[image.name] || imageCaptionMap[base] || base;
+};
+
+const buildSectionImageFigureHtml = (image, imageCaptionMap = null) =>
   `<figure style="text-align:center;"><img src="../images/${image.fileName}" alt="${escapeXml(
     image.name
   )}" style="border-radius:12px;border:3px solid #00BFA6;box-shadow:0 4px 20px rgba(0,191,166,0.35),0 8px 30px rgba(0,0,0,0.25);" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
-    stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
-      fileNameWithoutExtension(image.name)
+    getImageCaption(image, imageCaptionMap)
   )}</figcaption></figure>`;
 
 const distributeImagesInSection = (
@@ -432,6 +450,205 @@ const resolveEpubLanguage = () => {
   return DEFAULT_EPUB_METADATA.language;
 };
 
+const safelyDecodeURIComponent = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const getNormalizedPathSegments = (path = "") =>
+  path
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => safelyDecodeURIComponent(segment).trim())
+    .filter(Boolean);
+
+const toEncodedRepoPath = (path = "") => {
+  const segments = getNormalizedPathSegments(path);
+  if (!segments.length) {
+    return "";
+  }
+  return segments.map((segment) => encodeURIComponent(segment)).join("/");
+};
+
+const getLeadingNumber = (name = "") => {
+  const match = name.match(/^\s*(\d+)/);
+  return match ? Number.parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
+};
+
+const sortFoldersNumerically = (folders) =>
+  [...folders].sort((a, b) => {
+    const aNumber = getLeadingNumber(a.name);
+    const bNumber = getLeadingNumber(b.name);
+    if (aNumber !== bNumber) {
+      return aNumber - bNumber;
+    }
+    return a.name.localeCompare(b.name, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+
+const shouldIncludeFolder = (folder) => {
+  if (!folder || typeof folder.name !== "string") {
+    return false;
+  }
+  const folderName = folder.name.trim();
+  if (!folderName || folderName.startsWith(".")) {
+    return false;
+  }
+  return !EXCLUDED_FOLDER_NAMES.has(folderName);
+};
+
+const toDisplayTitle = (folderName = "") =>
+  folderName.replace(/^\s*\d+\s*[-_.]?\s*/, "").trim();
+
+const buildFolderUrl = (currentPath, folderName) => {
+  const normalizedParentPath = getNormalizedPathSegments(currentPath)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  const folderSlug = encodeURIComponent(folderName.trim());
+  if (!normalizedParentPath) {
+    return `https://a-reflections.web.app/${folderSlug}`;
+  }
+  return `https://a-reflections.web.app/${normalizedParentPath}/${folderSlug}`;
+};
+
+const buildFolderReadmeUrl = (currentPath, folderName) => {
+  const encodedPath = toEncodedRepoPath(currentPath);
+  const encodedFolderName = encodeURIComponent(folderName.trim());
+  const relativeReadmePath = encodedPath
+    ? `${encodedPath}/${encodedFolderName}/README.md`
+    : `${encodedFolderName}/README.md`;
+  return `${GITHUB}/${relativeReadmePath}`;
+};
+
+const extractFirstReadmeLine = (markdownText) => {
+  if (typeof markdownText !== "string") {
+    return "";
+  }
+  const firstLine = markdownText
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (!firstLine) {
+    return "";
+  }
+  return firstLine
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^[-*+]\s+/, "")
+    .replace(/^\d+\.\s+/, "")
+    .replace(/\|/g, "\\|")
+    .trim();
+};
+
+const fetchFolderSubtitles = async (folders, currentPath) => {
+  return Promise.all(
+    folders.map(async (folder) => {
+      try {
+        const readmeUrl = buildFolderReadmeUrl(currentPath, folder.name);
+        const response = await fetch(readmeUrl);
+        if (!response.ok) {
+          return { ...folder, subtitle: "" };
+        }
+        const text = await response.text();
+        return { ...folder, subtitle: extractFirstReadmeLine(text) };
+      } catch {
+        return { ...folder, subtitle: "" };
+      }
+    })
+  );
+};
+
+const buildFolderTableMarkdown = (folders, currentPath) => {
+  const links = sortFoldersNumerically(folders).map((folder) => {
+    const title = `[${toDisplayTitle(folder.name)}](${buildFolderUrl(
+      currentPath,
+      folder.name
+    )})`;
+    if (!folder.subtitle) {
+      return title;
+    }
+    return `${title} ${FOLDER_SUBTITLE_TOKEN} ${folder.subtitle}`;
+  });
+  const tableLines = ["|   |   |   |", "| --- | --- | --- |"];
+  for (let index = 0; index < links.length; index += 3) {
+    const first = links[index] || " ";
+    const second = links[index + 1] || " ";
+    const third = links[index + 2] || " ";
+    tableLines.push(`| ${first} | ${second} | ${third} |`);
+  }
+  return tableLines.join("\n");
+};
+
+const hasFolderListToken = (markdownText) =>
+  FOLDER_LIST_TOKEN_DETECT_REGEX.test(markdownText);
+
+const replaceFolderListToken = (markdownText, folders, currentPath) => {
+  if (!hasFolderListToken(markdownText)) {
+    return markdownText;
+  }
+  const tableMarkdown = buildFolderTableMarkdown(folders, currentPath);
+  return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, tableMarkdown);
+};
+
+const replaceFolderListWithFallback = (markdownText) => {
+  if (!hasFolderListToken(markdownText)) {
+    return markdownText;
+  }
+  return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, FOLDER_LIST_FALLBACK);
+};
+
+const expandFolderListToken = async (markdownText, path) => {
+  if (!hasFolderListToken(markdownText)) {
+    return markdownText;
+  }
+  const encodedPath = toEncodedRepoPath(path);
+  const folderApi = encodedPath
+    ? `${REPO_CONTENTS_API_BASE}/${encodedPath}?ref=main`
+    : `${REPO_CONTENTS_API_BASE}?ref=main`;
+  try {
+    const response = await fetch(folderApi);
+    if (!response.ok) {
+      return replaceFolderListWithFallback(markdownText);
+    }
+    const data = await response.json();
+    if (!Array.isArray(data)) {
+      return replaceFolderListWithFallback(markdownText);
+    }
+    const folders = data.filter(
+      (item) => item.type === "dir" && shouldIncludeFolder(item)
+    );
+    const foldersWithSubtitles = await fetchFolderSubtitles(folders, path);
+    return replaceFolderListToken(markdownText, foldersWithSubtitles, path);
+  } catch {
+    return replaceFolderListWithFallback(markdownText);
+  }
+};
+
+const normalizeFolderTableHtml = (html) => {
+  if (typeof html !== "string" || !html.includes("<table")) {
+    return html;
+  }
+  let out = html
+    .replace(/<table>/g, '<table class="readme-folder-table">')
+    .replace(/<th>/g, '<th class="readme-folder-table-th">');
+
+  out = out.replace(/<td([^>]*)>([\s\S]*?)<\/td>/g, (_, attrs = "", inner = "") => {
+    const cleanedInner = String(inner).replace(FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL, FOLDER_SUBTITLE_TOKEN);
+    const tokenIndex = cleanedInner.indexOf(FOLDER_SUBTITLE_TOKEN);
+    if (tokenIndex < 0) {
+      return `<td class="readme-folder-table-td"${attrs}>${cleanedInner}</td>`;
+    }
+    const before = cleanedInner.slice(0, tokenIndex).trim();
+    const after = cleanedInner.slice(tokenIndex + FOLDER_SUBTITLE_TOKEN.length).trim();
+    return `<td class="readme-folder-table-td"${attrs}><div class="folder-cell-title">${before}</div><div class="folder-cell-subtitle">${after}</div></td>`;
+  });
+  return out;
+};
+
 const fetchMarkdown = async (path) => {
   const normalizedPath = path === "/" ? "" : path;
   const readmeUrl = `${GITHUB}${normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`}README.md`;
@@ -456,7 +673,8 @@ const fetchMarkdown = async (path) => {
     throw new Error("Unable to fetch markdown for EPUB export");
   }
 
-  return response.text();
+  const markdownText = await response.text();
+  return expandFolderListToken(markdownText, normalizedPath);
 };
 
 const resolveDefaultTitleFromPath = (path = "") =>
@@ -464,12 +682,11 @@ const resolveDefaultTitleFromPath = (path = "") =>
     ? "تأملات"
     : decodeURIComponent(path.replaceAll("/", "").trim()) || "تأملات";
 
-const buildSectionPreviewFigureHtml = (image) =>
+const buildSectionPreviewFigureHtml = (image, imageCaptionMap = null) =>
   `<figure style="text-align:center;"><img src="${escapeXml(
     image.url
   )}" alt="${escapeXml(image.name)}" style="border-radius:12px;border:3px solid #00BFA6;box-shadow:0 4px 20px rgba(0,191,166,0.35),0 8px 30px rgba(0,0,0,0.25);" /><figcaption style="text-align:center;margin-top:0.35rem;font-size:0.85em;opacity:0.7;">${escapeXml(
-    stripLeadingImageNumber(fileNameWithoutExtension(image.name)) ||
-      fileNameWithoutExtension(image.name)
+    getImageCaption(image, imageCaptionMap)
   )}</figcaption></figure>`;
 
 /** In-app reading preview only — prefix first `##` like README text view; never written to repo or EPUB files */
@@ -487,8 +704,13 @@ export const buildEpubLikePreview = async ({
   path,
   images,
   sectionImageMiddleRatio,
+  sourceMarkdown,
+  imageCaptionMap,
 }) => {
-  const markdown = await fetchMarkdown(path);
+  const markdown =
+    typeof sourceMarkdown === "string" && sourceMarkdown.trim()
+      ? sourceMarkdown
+      : await fetchMarkdown(path);
   const sections = addH2SequencesToSections(splitMarkdownSections(markdown));
   const firstHeaderTitle = extractFirstMarkdownHeader(markdown);
   const resolvedSectionImageMiddleRatio = resolveSectionImageMiddleRatio(
@@ -524,10 +746,10 @@ export const buildEpubLikePreview = async ({
       resolvedSectionImageMiddleRatio
     );
     const middleImagesHtml = distributedImages.middle
-      .map((image) => buildSectionPreviewFigureHtml(image))
+      .map((image) => buildSectionPreviewFigureHtml(image, imageCaptionMap))
       .join("\n");
     const endImagesHtml = distributedImages.end
-      .map((image) => buildSectionPreviewFigureHtml(image))
+      .map((image) => buildSectionPreviewFigureHtml(image, imageCaptionMap))
       .join("\n");
 
     const markdownForPreview = prefixFirstH2LineWithNumberForPreview(
@@ -540,8 +762,8 @@ export const buildEpubLikePreview = async ({
       middleImagesHtml
     );
 
-    const sectionHtml = domPurify.sanitize(
-      marked.parse(markdownWithMiddleImages, { xhtml: true })
+    const sectionHtml = normalizeFolderTableHtml(
+      domPurify.sanitize(marked.parse(markdownWithMiddleImages, { xhtml: true }))
     );
 
     return {
@@ -593,8 +815,14 @@ export const exportFolderToEpub = async ({
   path,
   images,
   sectionImageMiddleRatio,
+  sourceMarkdown,
+  language,
+  imageCaptionMap,
 }) => {
-  const markdown = await fetchMarkdown(path);
+  const markdown =
+    typeof sourceMarkdown === "string" && sourceMarkdown.trim()
+      ? sourceMarkdown
+      : await fetchMarkdown(path);
   const sections = splitMarkdownSections(markdown);
   const firstHeaderTitle = extractFirstMarkdownHeader(markdown);
   const resolvedSectionImageMiddleRatio = resolveSectionImageMiddleRatio(
@@ -647,7 +875,10 @@ export const exportFolderToEpub = async ({
   const copyrightYear = new Date().getFullYear();
   const epubMetadata = {
     ...DEFAULT_EPUB_METADATA,
-    language: resolveEpubLanguage(),
+    language:
+      typeof language === "string" && language.trim()
+        ? language.trim().toLowerCase()
+        : resolveEpubLanguage(),
     rights: `© ${copyrightYear} ${DEFAULT_EPUB_METADATA.creator}. جميع الحقوق محفوظة.`,
     description,
   };
@@ -690,17 +921,17 @@ export const exportFolderToEpub = async ({
       resolvedSectionImageMiddleRatio
     );
     const middleImagesHtml = distributedImages.middle
-      .map((image) => buildSectionImageFigureHtml(image))
+      .map((image) => buildSectionImageFigureHtml(image, imageCaptionMap))
       .join("\n");
     const endImagesHtml = distributedImages.end
-      .map((image) => buildSectionImageFigureHtml(image))
+      .map((image) => buildSectionImageFigureHtml(image, imageCaptionMap))
       .join("\n");
     const markdownWithMiddleImages = injectHtmlAtMarkdownMidpoint(
       section.markdown,
       middleImagesHtml
     );
-    const sectionHtml = domPurify.sanitize(
-      marked.parse(markdownWithMiddleImages, { xhtml: true })
+    const sectionHtml = normalizeFolderTableHtml(
+      domPurify.sanitize(marked.parse(markdownWithMiddleImages, { xhtml: true }))
     );
     const sectionXhtml = ensureXhtmlVoidTags(sectionHtml);
 
@@ -924,4 +1155,11 @@ export const exportFolderToEpub = async ({
     .replace("T", "_")
     .replace("Z", "");
   saveAs(epubBlob, `${slugify(fileNameBase)}-${exportedAt}.epub`);
+};
+
+export const fetchReadmeMarkdownForRendering = async ({ path, sourceMarkdown }) => {
+  if (typeof sourceMarkdown === "string" && sourceMarkdown.trim()) {
+    return sourceMarkdown;
+  }
+  return fetchMarkdown(path);
 };
