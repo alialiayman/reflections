@@ -278,7 +278,7 @@ const LANGUAGE_OPTIONS = [
 const getLanguageMeta = (code) =>
   LANGUAGE_OPTIONS.find((l) => l.code === code) || LANGUAGE_OPTIONS[0];
 
-const RTL_LANGUAGE_CODES = new Set(["ar", "fa", "ur", "he"]);
+const RTL_LANGUAGE_CODES = new Set(["ar"]);
 
 function App() {
   const readmeSectionMarkdownsRef = useRef([]);

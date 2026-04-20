@@ -294,14 +294,18 @@ const ensureXhtmlVoidTags = (html = "") => {
   });
 };
 
-const buildXhtml = (title, body) => `<?xml version="1.0" encoding="UTF-8"?>
+const isRtlLanguage = (language = "") => String(language).toLowerCase() === "ar";
+
+const buildXhtml = (title, body, { language = "ar", dir = "rtl" } = {}) => `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="ar" xml:lang="ar" dir="rtl">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="${escapeXml(
+  language
+)}" xml:lang="${escapeXml(language)}" dir="${escapeXml(dir)}">
   <head>
     <meta charset="utf-8" />
     <title>${escapeXml(title)}</title>
   </head>
-  <body style="text-align:right;">
+  <body style="text-align:${dir === "rtl" ? "right" : "left"};">
 ${body}
   </body>
 </html>`;
@@ -882,6 +886,8 @@ export const exportFolderToEpub = async ({
     rights: `© ${copyrightYear} ${DEFAULT_EPUB_METADATA.creator}. جميع الحقوق محفوظة.`,
     description,
   };
+  const xhtmlDir = isRtlLanguage(epubMetadata.language) ? "rtl" : "ltr";
+  const xhtmlOptions = { language: epubMetadata.language, dir: xhtmlDir };
 
   const coverAsset = coverImage
     ? (() => {
@@ -941,7 +947,7 @@ export const exportFolderToEpub = async ({
       id: chapterId,
       href: chapterHref,
       heading: section.heading,
-      xhtml: buildXhtml(section.heading, body),
+      xhtml: buildXhtml(section.heading, body, xhtmlOptions),
     };
   });
 
@@ -956,7 +962,8 @@ export const exportFolderToEpub = async ({
           "الغلاف",
           `    <section id="cover" style="text-align:center;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;box-sizing:border-box;padding:1rem;"><img src="../images/${coverAsset.fileName}" alt="${escapeXml(
             title
-          )}" style="max-width:100%;height:auto;border-radius:12px;border:3px solid #00BFA6;box-shadow:0 4px 20px rgba(0,191,166,0.35),0 8px 30px rgba(0,0,0,0.25);" /></section>`
+          )}" style="max-width:100%;height:auto;border-radius:12px;border:3px solid #00BFA6;box-shadow:0 4px 20px rgba(0,191,166,0.35),0 8px 30px rgba(0,0,0,0.25);" /></section>`,
+          xhtmlOptions
         ),
       }
     : null;
@@ -973,7 +980,8 @@ export const exportFolderToEpub = async ({
         epubMetadata.creator
       )}</p><p style="margin:0.5rem 0;font-size:0.8em;opacity:0.6;">${escapeXml(
         epubMetadata.publisher
-      )}</p></section>`
+      )}</p></section>`,
+      xhtmlOptions
     ),
   };
 
@@ -1005,7 +1013,8 @@ export const exportFolderToEpub = async ({
         epubMetadata.aiDisclosure
       )}</p><p><strong>إخلاء المسؤولية:</strong> ${escapeXml(
         epubMetadata.disclaimer
-      )}</p><p><strong>تاريخ الإنشاء:</strong> ${escapeXml(createdDate)}</p></section>`
+      )}</p><p><strong>تاريخ الإنشاء:</strong> ${escapeXml(createdDate)}</p></section>`,
+      xhtmlOptions
     ),
   };
 
@@ -1016,7 +1025,8 @@ export const exportFolderToEpub = async ({
         heading: "الغلاف الخلفي",
         xhtml: buildXhtml(
           "الغلاف الخلفي",
-          `    <section id="back-cover" style="text-align:center;"><img src="../images/${backCoverAsset.fileName}" alt="الغلاف الخلفي" style="max-width:100%;height:auto;" /></section>`
+          `    <section id="back-cover" style="text-align:center;"><img src="../images/${backCoverAsset.fileName}" alt="الغلاف الخلفي" style="max-width:100%;height:auto;" /></section>`,
+          xhtmlOptions
         ),
       }
     : null;
@@ -1037,7 +1047,7 @@ export const exportFolderToEpub = async ({
         `        <li><a href="${chapter.href}">${escapeXml(chapter.heading)}</a></li>`
     )
     .join("\n")}\n      </ol>\n    </nav>`;
-  const navXhtml = buildXhtml(`${title} - الفهرس`, navBody);
+  const navXhtml = buildXhtml(`${title} - الفهرس`, navBody, xhtmlOptions);
   const tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="${escapeXml(
     epubMetadata.language
