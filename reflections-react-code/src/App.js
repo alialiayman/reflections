@@ -258,6 +258,7 @@ const COPY_LIMIT = getCopyLimitFromQuery();
 const REFERENCE_LINK = "\nhttps://a-reflections.web.app";
 const QURAN_TRANSLATION_DISCLAIMER =
   "> **Quranic translation note:** Any English rendering here is a meaning-based interpretation for readability, not a verbatim or authoritative tafsir translation. For precise theological study, refer to classical Arabic tafsir and multiple trusted translations.";
+const YOUTUBE_COMMENT_MAX_CHARS = 1200;
 
 const LANGUAGE_OPTIONS = [
   { code: "ar", label: "Arabic (original)", openaiLabel: "Arabic", epubLanguage: "ar" },
@@ -1199,11 +1200,20 @@ Rules:
             {
               role: "system",
               content:
-                "Write compelling YouTube-ready descriptions. Be concise, vivid, and informative. Include a short hook, key insights bullets, and hashtags.",
+                "You write concise, high-quality social comments. Return plain text only.",
             },
             {
               role: "user",
-              content: `Create a YouTube-ready summary in ${lang.openaiLabel} for this article markdown:\n\n${source}`,
+              content: `Summarize this article into ONE YouTube comment in ${lang.openaiLabel}.
+
+Hard constraints:
+- Max ${YOUTUBE_COMMENT_MAX_CHARS} characters total.
+- Keep it a single concise paragraph (no bullets, no hashtags, no title).
+- Preserve the core idea and key takeaway in engaging but natural language.
+- Do not add facts not present in the article.
+
+Article markdown:
+${source}`,
             },
           ],
         }),
@@ -1213,7 +1223,10 @@ Rules:
       if (!res.ok || !summary) {
         throw new Error(data?.error?.message || "Summary generation failed.");
       }
-      setYoutubeSummary(summary);
+      const trimmed = summary.length > YOUTUBE_COMMENT_MAX_CHARS
+        ? summary.slice(0, YOUTUBE_COMMENT_MAX_CHARS).trimEnd()
+        : summary;
+      setYoutubeSummary(trimmed);
       setYoutubeSummaryOpen(true);
     } catch (e) {
       setCopyToast({
@@ -1298,7 +1311,10 @@ Rules:
       >
         <DialogContent sx={{ pt: 3 }}>
           <Typography variant="h6" sx={{ mb: 1 }}>
-            YouTube summary ({getLanguageMeta(selectedLanguage).label})
+            YouTube comment draft ({getLanguageMeta(selectedLanguage).label})
+          </Typography>
+          <Typography variant="caption" sx={{ display: "block", mb: 1, color: "text.secondary" }}>
+            {`${youtubeSummary.length}/${YOUTUBE_COMMENT_MAX_CHARS} characters`}
           </Typography>
           <TextField
             fullWidth
