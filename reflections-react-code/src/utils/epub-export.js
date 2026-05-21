@@ -1079,7 +1079,7 @@ export const exportFolderToEpub = async ({
     '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
     ...spineDocs.map(
       (chapter) => {
-        const chapterProperties = chapter.id === "cover-page" ? ' properties="svg"' : "";
+        const chapterProperties = chapter.id === "title-page" ? ' properties="svg"' : "";
         return `<item id="${chapter.id}" href="${chapter.href}" media-type="application/xhtml+xml"${chapterProperties}/>`;
       }
     ),

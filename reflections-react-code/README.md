@@ -1,54 +1,56 @@
-# Reflections  
+# RepoPress
 
-Welcome to **Reflections**, a personal exploration of Islamic concepts and philosophical ideas.  
+**RepoPress** is a Git-native publishing platform for authors. Use **GitHub** as your content system: store Markdown and images in a repository with effectively unlimited storage, edit in the browser with AI assistance, and publish to the web or export an EPUB.
 
-## Website  
+This repository is a **live example** of RepoPress in use: the author uses it here to create, refine, and share personal ideas and long-form writing.
 
-[**a-reflections.web.app**](https://a-reflections.web.app)  
+## Live site
 
-## Purpose  
+[**a-reflections.web.app**](https://a-reflections.web.app)
 
-This website serves as a platform to share personal reflections on various Islamic topics, including:  
+## What RepoPress provides
 
-- Prayer  
-- Pilgrimage  
-- Fasting  
-- Dhul-Qarnayn  
-- The Israelites  
-- The Sabbath People  
-- Abraham  
-- And more  
+- **GitHub as CMS** — chapters and sections as Markdown; images in-repo
+- **Web publishing** — React reader hosted on Firebase
+- **GitHub sign-in** — OAuth via Firebase Authentication for in-browser editing
+- **AI writing** — section rewording, translation, summaries, text-to-speech
+- **AI images** — generate and manage illustrations tied to sections
+- **EPUB export** — preview and download books for Apple Books, Kindle, and other stores
 
-The aim is to present a **personal understanding** of these subjects, independent of inherited interpretations or traditional commentaries — seeking truth amid centuries of accumulated misconceptions.  
+## Content on this site
 
-## Content Management  
+The published writing explores Islamic topics, psychology, Egyptology, and related themes — a personal, methodical reading of texts rather than inherited commentary alone.
 
-The website uses **GitHub** as its **Content Management System**. All articles and reflections are stored as Markdown files in a GitHub repository. This allows content updates to be managed directly through the repository without needing a dedicated backend.  
+## Technology stack
 
-## Technology Stack  
+- React
+- Material-UI
+- React-Markdown
+- Firebase Hosting & Authentication (GitHub provider)
+- GitHub API
 
-- **ReactJS**  
-- **Material-UI**  
-- **React-Markdown**  
-- **Firebase Hosting**  
-- **GitHub API Integration**  
+## Local development
 
-## GitHub Login Setup
+1. Copy `.env.example` to `.env` (optional — the app includes defaults for the `a-reflections` Firebase project).
+2. Enable **GitHub** as a sign-in provider in [Firebase Authentication](https://console.firebase.google.com/) for project `a-reflections`.
+3. Install and run:
 
-Editing sections from the website now uses GitHub OAuth through Firebase Authentication.
+```bash
+npm ci
+npm start
+```
 
-1. Enable `GitHub` as a sign-in provider in your Firebase project Authentication settings.
-2. Add these environment variables to a local `.env` file:
+To override Firebase settings, set:
 
 ```
 REACT_APP_FIREBASE_API_KEY=...
-REACT_APP_FIREBASE_AUTH_DOMAIN=...
-REACT_APP_FIREBASE_PROJECT_ID=...
+REACT_APP_FIREBASE_AUTH_DOMAIN=a-reflections.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=a-reflections
 REACT_APP_FIREBASE_APP_ID=...
 ```
 
-3. Restart the app after updating environment variables.
+Restart the dev server after changing `.env`.
 
-## License  
+## License
 
-This project is shared under the **MIT License**. Feel free to read, share, or fork the content.
+MIT — feel free to read, share, or fork.

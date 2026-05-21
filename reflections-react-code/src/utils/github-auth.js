@@ -6,15 +6,13 @@ import {
   signInWithPopup,
   signOut
 } from 'firebase/auth';
+import {
+  isFirebaseConfigReady,
+  resolveFirebaseConfig,
+} from '../config/firebase-config';
 
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID
-};
-
-const hasFirebaseConfig = Object.values(firebaseConfig).every((value) => typeof value === 'string' && value.trim().length > 0);
+const firebaseConfig = resolveFirebaseConfig();
+const hasFirebaseConfig = isFirebaseConfigReady(firebaseConfig);
 
 let auth = null;
 let provider = null;

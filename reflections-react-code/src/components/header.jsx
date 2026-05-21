@@ -148,7 +148,7 @@ const Header = ({
               </IconButton>
             </Tooltip>
             <Typography variant="body2" sx={{ fontWeight: 600, opacity: 0.9 }}>
-              Reflections
+              RepoPress
             </Typography>
           </Box>
 
