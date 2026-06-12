@@ -60,10 +60,14 @@ const Header = ({
   translationLoading,
   onGenerateYoutubeSummary,
   summaryLoading,
+  isEditing = false,
   ...props
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const isMobileLandscape = useMediaQuery(
+    "(orientation: landscape) and (max-height: 500px)"
+  );
   const path = window.location.pathname;
   const {
     voice,
@@ -126,6 +130,7 @@ const Header = ({
           top: 0,
           zIndex: (muiTheme) => muiTheme.zIndex.drawer + 2,
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.35)",
+          display: isEditing && isMobileLandscape ? "none" : undefined,
         }}
         {...props}
       >

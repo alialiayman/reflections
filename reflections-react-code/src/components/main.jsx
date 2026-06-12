@@ -28,6 +28,7 @@ export default function Main({
   sourceMarkdown,
   imageCaptionMap,
   contentDirection = "rtl",
+  onEditingChange,
 }) {
   const path = window.location.pathname;
   const pathSegments = getNormalizedPathSegments(path);
@@ -62,6 +63,7 @@ export default function Main({
           openImageModal={openImageModal}
           overrideMarkdown={sourceMarkdown}
           contentDirection={contentDirection}
+          onEditingChange={onEditingChange}
         />
       )}
       <Typography
