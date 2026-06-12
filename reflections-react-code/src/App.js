@@ -338,6 +338,7 @@ function App() {
   const [youtubeSummaryOpen, setYoutubeSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [sourceMarkdownCache, setSourceMarkdownCache] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
   const contentDirection = RTL_LANGUAGE_CODES.has(selectedLanguage) ? "rtl" : "ltr";
   const path = window.location.pathname;
   const normalizedPathSegments = getNormalizedPathSegments(path);
@@ -1274,6 +1275,7 @@ ${source}`,
         onGenerateYoutubeSummary={handleGenerateYoutubeSummary}
         summaryLoading={summaryLoading}
         onExportEpub={handleExportEpubWithLanguage}
+        isEditing={isEditing}
       />
       <QuranResearchDialog
         open={quranResearchOpen}
@@ -1300,6 +1302,7 @@ ${source}`,
           }
           imageCaptionMap={selectedLanguage === "ar" ? null : translationImageCaptionMap}
           contentDirection={contentDirection}
+          onEditingChange={setIsEditing}
         />
       </Container>
 

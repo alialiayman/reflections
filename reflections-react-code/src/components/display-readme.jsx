@@ -380,7 +380,8 @@ const DisplayReadme = ({
     sectionMarkdownsRef,
     openImageModal,
     overrideMarkdown,
-    contentDirection = 'rtl'
+    contentDirection = 'rtl',
+    onEditingChange,
 }) => {
     const [error, setError] = useState(null);
     const [sections, setSections] = useState([]);
@@ -418,6 +419,12 @@ const DisplayReadme = ({
             sectionMarkdownsRef.current = sections.map((s) => s.markdown);
         }
     }, [sections, sectionMarkdownsRef]);
+
+    useEffect(() => {
+        if (typeof onEditingChange === 'function') {
+            onEditingChange(editingSectionIndex !== null);
+        }
+    }, [editingSectionIndex, onEditingChange]);
 
     useEffect(() => {
         if (typeof overrideMarkdown === 'string') {
