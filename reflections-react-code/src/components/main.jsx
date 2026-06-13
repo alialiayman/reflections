@@ -25,6 +25,7 @@ export default function Main({
   canEditReflections,
   sectionMarkdownsRef,
   openImageModal,
+  onImagesChanged,
   sourceMarkdown,
   imageCaptionMap,
   contentDirection = "rtl",
@@ -61,6 +62,7 @@ export default function Main({
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={sectionMarkdownsRef}
           openImageModal={openImageModal}
+          onImagesChanged={onImagesChanged}
           overrideMarkdown={sourceMarkdown}
           contentDirection={contentDirection}
           onEditingChange={onEditingChange}

@@ -23,7 +23,11 @@ import remarkGfm from 'remark-gfm';
 import { GITHUB, getVisionKey } from '../constants';
 import { REWORD_SECTION_SYSTEM_PROMPT } from '../prompts/reword-section-system-prompt';
 import { useTts } from '../context/TtsContext';
-import { addH2SequencesToSections } from '../utils/markdown-section-h2';
+import {
+    addH2SequencesToSections,
+    collectReservedH2SequenceNumbers,
+    getH2SequenceAtIndex
+} from '../utils/markdown-section-h2';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -379,6 +383,7 @@ const DisplayReadme = ({
     canEditReflections,
     sectionMarkdownsRef,
     openImageModal,
+    onImagesChanged,
     overrideMarkdown,
     contentDirection = 'rtl',
     onEditingChange,
@@ -403,16 +408,22 @@ const DisplayReadme = ({
 
     /** Display-only: prefix each ## heading with a running index (not written to GitHub). */
     const sectionsForView = useMemo(() => {
+        const resolveMarkdown = (sectionIndex) =>
+            editingSectionIndex === sectionIndex
+                ? editingMarkdown
+                : sections[sectionIndex]?.markdown || '';
+
         let counter = 0;
-        return sections.map((section) => ({
+        return sections.map((section, sectionIndex) => ({
             ...section,
+            h2Sequence: getH2SequenceAtIndex(sections, sectionIndex, resolveMarkdown),
             displayMarkdown: section.markdown.replace(/^## (?!#)([^\r\n]*)$/gm, (_, rest) => {
                 counter += 1;
                 const body = rest.replace(/^\s+/, '');
                 return `## ${counter}. ${body}`;
             })
         }));
-    }, [sections]);
+    }, [sections, editingSectionIndex, editingMarkdown]);
 
     useEffect(() => {
         if (sectionMarkdownsRef) {
@@ -823,6 +834,60 @@ const DisplayReadme = ({
         return maxNumber + 1;
     };
 
+    const resolveSectionMarkdown = (sectionIndex) =>
+        editingSectionIndex === sectionIndex
+            ? editingMarkdown
+            : sections[sectionIndex]?.markdown || '';
+
+    const resolveImageNumberForSection = async (sectionIndex) => {
+        const h2Seq = getH2SequenceAtIndex(sections, sectionIndex, resolveSectionMarkdown);
+        if (h2Seq != null) {
+            return h2Seq;
+        }
+
+        const reserved = collectReservedH2SequenceNumbers(sections, resolveSectionMarkdown);
+        let candidate = await getNextImageNumberInFolder();
+        while (reserved.has(candidate)) {
+            candidate += 1;
+        }
+        return candidate;
+    };
+
+    const putGeneratedImageOnGithub = async (generatedFileName, imageB64) => {
+        const githubImagePath = [...getNormalizedPathSegments(path), generatedFileName].join('/');
+        const encodedImagePath = toEncodedGitHubContentsPath(githubImagePath);
+        const imageContentsUrl = `${REPO_CONTENTS_API_BASE}/${encodedImagePath}`;
+        const githubHeaders = {
+            Authorization: `Bearer ${githubToken}`,
+            Accept: 'application/vnd.github+json'
+        };
+        const putBody = (sha) => ({
+            message: `Add generated section image: ${generatedFileName}`,
+            content: imageB64,
+            encoding: 'base64',
+            branch: GITHUB_DEFAULT_BRANCH,
+            ...(sha ? { sha } : {})
+        });
+
+        try {
+            await axios.put(imageContentsUrl, putBody(), { headers: githubHeaders });
+        } catch (error) {
+            if (error?.response?.status !== 422) {
+                throw error;
+            }
+
+            const existing = await axios.get(`${imageContentsUrl}?ref=${GITHUB_DEFAULT_BRANCH}`, {
+                headers: githubHeaders
+            });
+            const sha = existing.data?.sha;
+            if (!sha) {
+                throw error;
+            }
+
+            await axios.put(imageContentsUrl, putBody(sha), { headers: githubHeaders });
+        }
+    };
+
     const handleGenerateSectionImage = async (idx) => {
         if (!canEditReflections || !githubToken) {
             setSnackbarState({
@@ -865,7 +930,7 @@ const DisplayReadme = ({
                         },
                         {
                             role: 'user',
-                            content: `اقترح اسماً عربياً قصيراً لصورة تمثل هذا النص:\n\n${sectionText}`
+                            content: `اقترح اسماً عربياً قصيراً لصورة تمثل هذا النص:\n\n${sectionText.slice(0, 4000)}`
                         }
                     ],
                     max_tokens: 80,
@@ -873,6 +938,9 @@ const DisplayReadme = ({
                 })
             });
             const nameData = await nameResponse.json();
+            if (!nameResponse.ok) {
+                throw new Error(nameData?.error?.message || 'Image name suggestion failed');
+            }
             const recommendedStem = toSafeArabicFileStem(nameData?.choices?.[0]?.message?.content || 'صورة');
 
             const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
@@ -883,40 +951,31 @@ const DisplayReadme = ({
                 },
                 body: JSON.stringify({
                     model: 'gpt-image-1',
-                    prompt: `أنشئ صورة فنية واقعية تعبر عن هذا النص العربي بدون أي كتابة على الصورة:\n\n${sectionText}`,
-                    size: '1024x1024'
+                    prompt: `أنشئ صورة فنية واقعية تعبر عن هذا النص العربي بدون أي كتابة على الصورة:\n\n${sectionText.slice(0, 4000)}`,
+                    size: '1024x1024',
+                    response_format: 'b64_json'
                 })
             });
             const imageData = await imageResponse.json();
+            if (!imageResponse.ok) {
+                throw new Error(imageData?.error?.message || 'Image generation failed');
+            }
             const imageB64 = imageData?.data?.[0]?.b64_json;
             if (!imageB64) {
                 throw new Error('No generated image returned');
             }
 
-            const h2Seq = sections[idx]?.h2Sequence;
-            const imageNumber =
-                h2Seq != null && Number.isInteger(h2Seq)
-                    ? h2Seq
-                    : await getNextImageNumberInFolder();
+            const imageNumber = await resolveImageNumberForSection(idx);
             const generatedFileName = `${imageNumber} ${recommendedStem}${DEFAULT_GENERATED_IMAGE_EXTENSION}`;
-            const githubImagePath = [...getNormalizedPathSegments(path), generatedFileName].join('/');
-            const encodedImagePath = toEncodedGitHubContentsPath(githubImagePath);
-            const imageContentsUrl = `${REPO_CONTENTS_API_BASE}/${encodedImagePath}`;
-
-            await axios.put(
-                imageContentsUrl,
-                {
-                    message: `Add generated section image: ${generatedFileName}`,
-                    content: imageB64,
-                    branch: GITHUB_DEFAULT_BRANCH
-                },
-                {
-                    headers: {
-                        Authorization: `Bearer ${githubToken}`,
-                        Accept: 'application/vnd.github+json'
-                    }
-                }
+            const encodedImagePath = toEncodedGitHubContentsPath(
+                [...getNormalizedPathSegments(path), generatedFileName].join('/')
             );
+
+            await putGeneratedImageOnGithub(generatedFileName, imageB64);
+
+            if (typeof onImagesChanged === 'function') {
+                await onImagesChanged();
+            }
 
             const generatedPreviewUrl = `${GITHUB}/${encodedImagePath}?v=${Date.now()}`;
             if (typeof openImageModal === 'function') {
@@ -931,11 +990,14 @@ const DisplayReadme = ({
         } catch (error) {
             const status = error?.response?.status;
             const apiMessage = error?.response?.data?.message;
+            const detail = error instanceof Error ? error.message : '';
             setSnackbarState({
                 open: true,
                 message: apiMessage
                     ? `Failed to generate image (${status || 'error'}): ${apiMessage}`
-                    : 'Failed to generate and save section image.',
+                    : detail
+                        ? `Failed to generate image: ${detail}`
+                        : 'Failed to generate and save section image.',
                 severity: 'error'
             });
         } finally {

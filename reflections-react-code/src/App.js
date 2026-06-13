@@ -18,7 +18,7 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import SendIcon from "@mui/icons-material/Send";
 import axios from "axios";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import Header from "./components/header";
 import Main from "./components/main";
@@ -450,40 +450,40 @@ function App() {
     };
   }, [githubToken]);
 
-  useEffect(() => {
-    const fetchImages = async () => {
-      try {
-        const response = await fetch(
-          `https://api.github.com/repos/alialiayman/reflections/contents/${
-            apiPath
-          }?ref=main`
-        );
-        const data = await response.json();
+  const refreshImages = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/alialiayman/reflections/contents/${apiPath}?ref=main`
+      );
+      const data = await response.json();
 
-        if (Array.isArray(data)) {
-          const imageFiles = data
-            .filter((file) => {
-              const lowerName = file.name.toLowerCase();
-              return (
-                lowerName.endsWith(".jpg") ||
-                lowerName.endsWith(".jpeg") ||
-                lowerName.endsWith(".png")
-              );
-            })
-            .map((file) => ({
-              name: file.name,
-              url: file.download_url,
-            }));
+      if (Array.isArray(data)) {
+        const imageFiles = data
+          .filter((file) => {
+            const lowerName = file.name.toLowerCase();
+            return (
+              lowerName.endsWith(".jpg") ||
+              lowerName.endsWith(".jpeg") ||
+              lowerName.endsWith(".png")
+            );
+          })
+          .map((file) => ({
+            name: file.name,
+            url: file.download_url,
+          }));
 
-          setImages(imageFiles);
-        }
-      } catch (error) {
-        console.error("Failed to fetch images", error);
+        setImages(imageFiles);
+      } else {
+        setImages([]);
       }
-    };
-
-    fetchImages();
+    } catch (error) {
+      console.error("Failed to fetch images", error);
+    }
   }, [apiPath]);
+
+  useEffect(() => {
+    void refreshImages();
+  }, [refreshImages]);
 
   useEffect(() => {
     setSourceMarkdownCache("");
@@ -1297,6 +1297,7 @@ ${source}`,
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={readmeSectionMarkdownsRef}
           openImageModal={handleClickOpen}
+          onImagesChanged={refreshImages}
           sourceMarkdown={
             selectedLanguage === "ar" || !translatedMarkdown ? null : translatedMarkdown
           }
