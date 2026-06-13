@@ -536,7 +536,29 @@ function App() {
     return splitTextIntoChunks(fullText);
   };
 
-  const handleCopy = () => {
+  const copyWithFallback = async (text) => {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+
+    const copiedUsingFallback = document.execCommand("copy");
+    document.body.removeChild(textArea);
+
+    if (!copiedUsingFallback) {
+      throw new Error("Clipboard is unavailable.");
+    }
+  };
+
+  const handleCopy = async () => {
     const visibleChunks = getCurrentVisibleChunks();
     setTextChunks(visibleChunks);
 
@@ -549,24 +571,30 @@ function App() {
       return;
     }
 
-    if (copyIndex >= visibleChunks.length) {
+    const currentIndex = copyIndex % visibleChunks.length;
+
+    try {
+      await copyWithFallback(visibleChunks[currentIndex]);
+      const copiedChunkNumber = currentIndex + 1;
+      const completedAllChunks = copiedChunkNumber === visibleChunks.length;
+
+      setCopied(true);
+      setTimeout(() => setCopied(false), 3000);
+      setCopyIndex(completedAllChunks ? 0 : copiedChunkNumber);
       setCopyToast({
         open: true,
-        message: "All text has been copied!",
-        severity: "info",
+        message: completedAllChunks
+          ? `Copied ${copiedChunkNumber}/${visibleChunks.length}. All parts copied.`
+          : `Copied ${copiedChunkNumber}/${visibleChunks.length}.`,
+        severity: "success",
       });
-      setCopyIndex(0); // Reset index to allow copying again
-      return;
+    } catch {
+      setCopyToast({
+        open: true,
+        message: "Failed to copy text. Please allow clipboard access.",
+        severity: "error",
+      });
     }
-
-    navigator.clipboard
-      .writeText(visibleChunks[copyIndex])
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 3000);
-        setCopyIndex(copyIndex + 1); // Move to the next chunk for the next copy
-      })
-      .catch((err) => console.error("Failed to copy:", err));
   };
 
   const handleCloseCopyToast = (_, reason) => {
