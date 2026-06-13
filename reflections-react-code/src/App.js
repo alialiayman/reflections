@@ -588,7 +588,8 @@ function App() {
           : `Copied ${copiedChunkNumber}/${visibleChunks.length}.`,
         severity: "success",
       });
-    } catch {
+    } catch (error) {
+      console.error("Failed to copy chunked text:", error);
       setCopyToast({
         open: true,
         message: "Failed to copy text. Please allow clipboard access.",
