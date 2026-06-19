@@ -66,3 +66,15 @@
 ## إلى أين يتجه هذا المشروع؟
 
 هذا الموقع هو المكان الذي سأجمع فيه هذه التأملات، ثم أطوّرها إلى محتوى يصلح للنشر والمشاركة والحوار. ومع الوقت، يمكن أن تمتد هذه المواد إلى منصات اجتماعية وكتب رقمية ومشاريع معرفية أوسع، مع بقاء هذه الصفحة هي الباب الأول للدخول إلى عالم **تأملات**.
+
+## منصات النشر والتوزيع
+
+للتذكير بمنصات النشر التي أستخدمها أو أراجعها عند رفع المحتوى:
+
+- [iTunes Connect / Apple Podcasts Connect](https://podcastsconnect.apple.com/)
+- [Apple Books (Authors)](https://authors.apple.com/epub-upload/start)
+- [Amazon Kindle Direct Publishing (KDP)](https://kdp.amazon.com/en_US/bookshelf?ref_=kdp_kdp_TAC_TN_bs)
+- [Draft2Digital / Smashwords](https://draft2digital.com/book/)
+- Google Play Books
+- Barnes & Noble Press (NOOK)
+- Kobo Writing Life
