@@ -75,6 +75,7 @@
 - [Apple Books (Authors)](https://authors.apple.com/epub-upload/start)
 - [Amazon Kindle Direct Publishing (KDP)](https://kdp.amazon.com/en_US/bookshelf?ref_=kdp_kdp_TAC_TN_bs)
 - [Draft2Digital / Smashwords](https://draft2digital.com/book/)
+- [Substack](https://substack.com/@aymanmali)
 - Google Play Books
 - Barnes & Noble Press (NOOK)
 - Kobo Writing Life
