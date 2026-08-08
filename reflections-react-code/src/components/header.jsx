@@ -311,7 +311,7 @@ const Header = ({
                 <IconButton
                   color="inherit"
                   onClick={handleExportEpub}
-                  disabled={exportingEpub || loading || !images.length}
+                  disabled={exportingEpub || loading}
                   aria-label="Export EPUB"
                   sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
                 >

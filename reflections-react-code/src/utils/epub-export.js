@@ -506,6 +506,60 @@ const shouldIncludeFolder = (folder) => {
   return !EXCLUDED_FOLDER_NAMES.has(folderName);
 };
 
+const isSupportedImage = (item) =>
+  item?.type === "file" && /\.(?:gif|jpe?g|png|svg|webp)$/i.test(item.name || "");
+
+const joinRepoPath = (parentPath, childName) =>
+  [...getNormalizedPathSegments(parentPath), childName.trim()].join("/");
+
+const fetchFolderContents = async (path) => {
+  const encodedPath = toEncodedRepoPath(path);
+  const folderApi = encodedPath
+    ? `${REPO_CONTENTS_API_BASE}/${encodedPath}?ref=main`
+    : `${REPO_CONTENTS_API_BASE}?ref=main`;
+  const response = await fetch(folderApi);
+  if (!response.ok) {
+    throw new Error(`Unable to discover nested EPUB pages under ${path || "/"}`);
+  }
+
+  const contents = await response.json();
+  if (!Array.isArray(contents)) {
+    throw new Error(`Invalid folder listing for ${path || "/"}`);
+  }
+  return contents;
+};
+
+const collectDescendantPages = async (parentPath, knownContents = null) => {
+  const contents = knownContents || (await fetchFolderContents(parentPath));
+  const childFolders = sortFoldersNumerically(
+    contents.filter((item) => item.type === "dir" && shouldIncludeFolder(item))
+  );
+  const pages = [];
+
+  for (const folder of childFolders) {
+    const childPath = joinRepoPath(parentPath, folder.name);
+    const childContents = await fetchFolderContents(childPath);
+    const readme = childContents.find(
+      (item) => item.type === "file" && item.name.toLowerCase() === "readme.md"
+    );
+
+    if (readme) {
+      pages.push({
+        path: childPath,
+        markdown: await fetchMarkdown(childPath),
+        images: childContents.filter(isSupportedImage).map((image) => ({
+          name: image.name,
+          url: image.download_url,
+        })),
+      });
+    }
+
+    pages.push(...(await collectDescendantPages(childPath, childContents)));
+  }
+
+  return pages;
+};
+
 const toDisplayTitle = (folderName = "") =>
   folderName.replace(/^\s*\d+\s*[-_.]?\s*/, "").trim();
 
@@ -823,28 +877,49 @@ export const exportFolderToEpub = async ({
   language,
   imageCaptionMap,
 }) => {
-  const markdown =
+  const rootMarkdown =
     typeof sourceMarkdown === "string" && sourceMarkdown.trim()
-      ? sourceMarkdown
+      ? await expandFolderListToken(sourceMarkdown, path)
       : await fetchMarkdown(path);
-  const sections = splitMarkdownSections(markdown);
-  const firstHeaderTitle = extractFirstMarkdownHeader(markdown);
+  const descendantPages = await collectDescendantPages(path);
+  const pages = [
+    { path, markdown: rootMarkdown, images: Array.isArray(images) ? images : [] },
+    ...descendantPages,
+  ];
+  const sections = pages.flatMap((page, pageIndex) =>
+    splitMarkdownSections(page.markdown).map((section, pageSectionIndex) => ({
+      ...section,
+      pageIndex,
+      pageSectionIndex,
+    }))
+  );
+  const firstHeaderTitle = extractFirstMarkdownHeader(rootMarkdown);
   const resolvedSectionImageMiddleRatio = resolveSectionImageMiddleRatio(
     sectionImageMiddleRatio
   );
 
-  const coverImage = images.find(
+  const rootImages = pages[0].images;
+  const coverImage = rootImages.find(
     (image) => normalizeImageLabel(image.name) === "cover"
   );
-  const backCoverImage = images.find(
+  const backCoverImage = rootImages.find(
     (image) => normalizeImageLabel(image.name) === "back cover"
   );
 
-  const contentImages = images.filter(
-    (image) => image !== coverImage && image !== backCoverImage
-  );
-
-  const mappedImages = mapImagesToSections(contentImages, sections.length);
+  let sectionOffset = 0;
+  const mappedImages = pages.flatMap((page, pageIndex) => {
+    const pageSectionsCount = sections.filter(
+      (section) => section.pageIndex === pageIndex
+    ).length;
+    const pageImages = page.images.filter(
+      (image) => image !== coverImage && image !== backCoverImage
+    );
+    const mappedPageImages = mapImagesToSections(pageImages, pageSectionsCount).map(
+      (image) => ({ ...image, sectionIndex: image.sectionIndex + sectionOffset })
+    );
+    sectionOffset += pageSectionsCount;
+    return mappedPageImages;
+  });
   const domPurify = createDOMPurify(window);
 
   const enrichedImages = await Promise.all(
@@ -873,7 +948,7 @@ export const exportFolderToEpub = async ({
 
   const title = firstHeaderTitle || resolveDefaultTitleFromPath(path);
   const identifier = generateIsbnLikeIdentifier();
-  const description = extractFirstMarkdownParagraph(markdown);
+  const description = extractFirstMarkdownParagraph(rootMarkdown);
   const createdDate = new Date().toISOString().slice(0, 10);
   const modifiedDate = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
   const copyrightYear = new Date().getFullYear();
