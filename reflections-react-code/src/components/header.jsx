@@ -207,7 +207,28 @@ const Header = ({
                     color="inherit"
                     onClick={handleCopy}
                     aria-label="Copy to clipboard"
-                    sx={{ border: "1px solid rgba(164, 180, 148, 0.45)" }}
+                    aria-pressed={copied}
+                    sx={{
+                      border: "1px solid rgba(164, 180, 148, 0.45)",
+                      bgcolor: copied ? "rgba(164, 180, 148, 0.32)" : "transparent",
+                      boxShadow: copied
+                        ? "inset 0 2px 5px rgba(0, 0, 0, 0.4)"
+                        : "none",
+                      transform: copied ? "translateY(2px) scale(0.96)" : "none",
+                      transition: "background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, border-color 160ms ease",
+                      "&:hover": {
+                        bgcolor: copied
+                          ? "rgba(164, 180, 148, 0.32)"
+                          : "rgba(164, 180, 148, 0.18)",
+                        borderColor: "rgba(214, 223, 204, 0.85)",
+                        boxShadow: copied
+                          ? "inset 0 2px 5px rgba(0, 0, 0, 0.4)"
+                          : "0 3px 8px rgba(0, 0, 0, 0.3)",
+                        transform: copied
+                          ? "translateY(2px) scale(0.96)"
+                          : "translateY(-2px)",
+                      },
+                    }}
                   >
                     <ContentCopyIcon />
                   </IconButton>
