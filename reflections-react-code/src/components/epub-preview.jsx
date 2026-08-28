@@ -1,6 +1,7 @@
 import { CircularProgress, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { buildEpubLikePreview } from "../utils/epub-export";
+import { isPathAccessible } from "../utils/private-folder-access";
 
 const EpubPreview = ({
   path,
@@ -8,6 +9,7 @@ const EpubPreview = ({
   sourceMarkdown,
   imageCaptionMap,
   contentDirection = "rtl",
+  githubLogin = "",
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,11 +23,16 @@ const EpubPreview = ({
         setLoading(true);
         setError(null);
 
+        if (!isPathAccessible(path, githubLogin)) {
+          throw new Error("blocked");
+        }
+
         const preview = await buildEpubLikePreview({
           path,
           images,
           sourceMarkdown,
           imageCaptionMap,
+          githubLogin,
         });
         if (!active) {
           return;
@@ -51,7 +58,7 @@ const EpubPreview = ({
     return () => {
       active = false;
     };
-  }, [path, images, sourceMarkdown, imageCaptionMap]);
+  }, [path, images, sourceMarkdown, imageCaptionMap, githubLogin]);
 
   if (loading) {
     return (

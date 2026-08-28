@@ -1,7 +1,8 @@
-import { Typography } from "@mui/material";
+import { Alert, Typography } from "@mui/material";
 import { useEffect } from "react";
 import DisplayReadme from "./display-readme";
 import EpubPreview from "./epub-preview";
+import { isPathAccessible } from "../utils/private-folder-access";
 
 const safelyDecodeURIComponent = (value) => {
   try {
@@ -22,6 +23,7 @@ export default function Main({
   previewMode,
   images,
   githubToken,
+  githubLogin = "",
   canEditReflections,
   sectionMarkdownsRef,
   openImageModal,
@@ -38,6 +40,7 @@ export default function Main({
   const displayPath = pathSegments.join("/");
   const footerHref = `https://a-reflections.web.app${canonicalPath === "/" ? "" : canonicalPath}`;
   const footerLabel = `https://a-reflections.web.app${displayPath ? `/${displayPath}` : ""}`;
+  const privatePathBlocked = !isPathAccessible(canonicalPath, githubLogin);
 
   useEffect(() => {
     if (previewMode && sectionMarkdownsRef) {
@@ -47,18 +50,24 @@ export default function Main({
 
   return (
     <div id="readme">
-      {previewMode ? (
+      {privatePathBlocked ? (
+        <Alert severity="error" sx={{ mt: 1 }}>
+          This page is not available.
+        </Alert>
+      ) : previewMode ? (
         <EpubPreview
           path={canonicalPath}
           images={images}
           sourceMarkdown={sourceMarkdown}
           imageCaptionMap={imageCaptionMap}
           contentDirection={contentDirection}
+          githubLogin={githubLogin}
         />
       ) : (
         <DisplayReadme
           path={canonicalPath}
           githubToken={githubToken}
+          githubLogin={githubLogin}
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={sectionMarkdownsRef}
           openImageModal={openImageModal}

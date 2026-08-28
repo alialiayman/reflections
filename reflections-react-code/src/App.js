@@ -32,6 +32,7 @@ import {
   signOutGithub,
 } from "./utils/github-auth";
 import { checkReflectionsEditorIdentity } from "./utils/reflections-editor-access";
+import { isPathAccessible } from "./utils/private-folder-access";
 import { TtsProvider } from "./context/TtsContext";
 
 const DEFAULT_COPY_LIMIT = 3500;
@@ -380,6 +381,12 @@ function App() {
       setAuthChecking(true);
 
       try {
+        const identity = await checkReflectionsEditorIdentity(githubToken);
+        if (!cancelled && identity.login) {
+          setGithubLogin(identity.login);
+          localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, identity.login);
+        }
+
         const response = await axios.get(
           `${GITHUB_API_BASE}/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`,
           {
@@ -394,7 +401,6 @@ function App() {
         let mayEdit = false;
 
         if (canPush) {
-          const identity = await checkReflectionsEditorIdentity(githubToken);
           mayEdit = identity.eligible;
           if (!cancelled && !identity.eligible) {
             if (identity.reason === "read_org_scope_required") {
@@ -451,6 +457,11 @@ function App() {
   }, [githubToken]);
 
   const refreshImages = useCallback(async () => {
+    if (!isPathAccessible(path, githubLogin)) {
+      setImages([]);
+      return;
+    }
+
     try {
       const response = await fetch(
         `https://api.github.com/repos/alialiayman/reflections/contents/${apiPath}?ref=main`
@@ -479,7 +490,7 @@ function App() {
     } catch (error) {
       console.error("Failed to fetch images", error);
     }
-  }, [apiPath]);
+  }, [apiPath, githubLogin, path]);
 
   useEffect(() => {
     void refreshImages();
@@ -619,24 +630,26 @@ function App() {
 
     try {
       setAuthLoading(true);
-      const { user, accessToken } = await signInWithGithub();
+      const { accessToken } = await signInWithGithub();
 
       if (!accessToken) {
         throw new Error("Missing GitHub access token.");
       }
 
-      const login =
-        user?.reloadUserInfo?.screenName || user?.providerData?.[0]?.uid || "";
-      if (login) {
-        setGithubLogin(login);
-        localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, login);
-      }
-
       localStorage.setItem(GITHUB_ACCESS_TOKEN_STORAGE_KEY, accessToken);
       setGithubToken(accessToken);
+
+      const identity = await checkReflectionsEditorIdentity(accessToken);
+      if (identity.login) {
+        setGithubLogin(identity.login);
+        localStorage.setItem(GITHUB_LOGIN_STORAGE_KEY, identity.login);
+      }
+
       setCopyToast({
         open: true,
-        message: "Signed in with GitHub.",
+        message: identity.login
+          ? `Signed in with GitHub as @${identity.login}.`
+          : "Signed in with GitHub.",
         severity: "success",
       });
     } catch {
@@ -1033,10 +1046,13 @@ Then on a new line prefixed with 'اسم مقترح: ' suggest an Arabic file na
   };
 
   const loadSourceMarkdown = async () => {
+    if (!isPathAccessible(path, githubLogin)) {
+      throw new Error("This page is not available.");
+    }
     if (sourceMarkdownCache.trim()) {
       return sourceMarkdownCache;
     }
-    const markdown = await fetchReadmeMarkdownForRendering({ path });
+    const markdown = await fetchReadmeMarkdownForRendering({ path, githubLogin });
     setSourceMarkdownCache(markdown);
     return markdown;
   };
@@ -1188,6 +1204,9 @@ Rules:
   };
 
   const handleExportEpubWithLanguage = async ({ path: exportPath, images: exportImages }) => {
+    if (!isPathAccessible(exportPath, githubLogin)) {
+      throw new Error("Unable to export this folder.");
+    }
     const lang = getLanguageMeta(selectedLanguage);
     let sourceMarkdown = await loadSourceMarkdown();
     let captionMap = null;
@@ -1205,6 +1224,7 @@ Rules:
       sourceMarkdown,
       language: lang.epubLanguage,
       imageCaptionMap: captionMap,
+      githubLogin,
     });
   };
 
@@ -1323,6 +1343,7 @@ ${source}`,
           previewMode={previewMode}
           images={images}
           githubToken={githubToken}
+          githubLogin={githubLogin}
           canEditReflections={canEditReflections}
           sectionMarkdownsRef={readmeSectionMarkdownsRef}
           openImageModal={handleClickOpen}

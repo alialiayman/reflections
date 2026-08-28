@@ -28,12 +28,17 @@ import {
     collectReservedH2SequenceNumbers,
     getH2SequenceAtIndex
 } from '../utils/markdown-section-h2';
+import {
+    isPathAccessible,
+    shouldIncludeFolderInList,
+    sortFoldersForDisplay,
+} from '../utils/private-folder-access';
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
 const REPO_CONTENTS_API_BASE = 'https://api.github.com/repos/alialiayman/reflections/contents';
 const SITE_BASE_URL = 'https://a-reflections.web.app';
-const EXCLUDED_FOLDER_NAMES = new Set(['reflections-react-code']);
+const PRIVATE_FOLDER_BLOCKED_MESSAGE = 'This page is not available.';
 const FOLDER_LIST_FALLBACK = '⚠️ تعذر تحميل قائمة المجلدات من GitHub حالياً.';
 const FOLDER_SUBTITLE_TOKEN = '[[FOLDER_SUBTITLE]]';
 const FOLDER_SUBTITLE_TOKEN_REGEX = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/i;
@@ -66,10 +71,6 @@ const normalizeRewordForCompare = (s) =>
         .replace(/\s+/g, ' ')
         .trim();
 
-const getLeadingNumber = (name) => {
-    const match = name.match(/^\s*(\d+)/);
-    return match ? Number.parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
-};
 
 const safelyDecodeURIComponent = (value) => {
     try {
@@ -173,35 +174,8 @@ const buildFolderReadmeUrl = (currentPath, folderName) => {
     return `${GITHUB}/${relativeReadmePath}`;
 };
 
-const sortFoldersNumerically = (folders) => {
-    return [...folders].sort((a, b) => {
-        const aNumber = getLeadingNumber(a.name);
-        const bNumber = getLeadingNumber(b.name);
-
-        if (aNumber !== bNumber) {
-            return aNumber - bNumber;
-        }
-
-        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-    });
-};
-
-const shouldIncludeFolder = (folder) => {
-    if (!folder || typeof folder.name !== 'string') {
-        return false;
-    }
-
-    const folderName = folder.name.trim();
-    if (!folderName || folderName.startsWith('.')) {
-        return false;
-    }
-
-    return !EXCLUDED_FOLDER_NAMES.has(folderName);
-};
-
-const toDisplayTitle = (folderName) => {
-    return folderName.replace(/^\s*\d+\s*[-_.]?\s*/, '').trim();
-};
+const toDisplayTitle = (folderName) =>
+    folderName.replace(/^\s*\d+\s*[-_.]?\s*/, '').trim();
 
 const extractFirstReadmeLine = (markdownText) => {
     if (typeof markdownText !== 'string') {
@@ -250,7 +224,7 @@ const fetchFolderSubtitles = async (folders, currentPath) => {
 };
 
 const buildFolderTableMarkdown = (folders, currentPath) => {
-    const links = sortFoldersNumerically(folders)
+    const links = sortFoldersForDisplay(folders)
         .map((folder) => {
             const title = `[${toDisplayTitle(folder.name)}](${buildFolderUrl(currentPath, folder.name)})`;
             if (!folder.subtitle) {
@@ -380,6 +354,7 @@ const DisplayReadme = ({
     path,
     filename = 'README.md',
     githubToken,
+    githubLogin = '',
     canEditReflections,
     sectionMarkdownsRef,
     openImageModal,
@@ -438,6 +413,13 @@ const DisplayReadme = ({
     }, [editingSectionIndex, onEditingChange]);
 
     useEffect(() => {
+        if (!isPathAccessible(path, githubLogin)) {
+            setSections([]);
+            setError(PRIVATE_FOLDER_BLOCKED_MESSAGE);
+            document.title = 'Not found';
+            return;
+        }
+
         if (typeof overrideMarkdown === 'string') {
             const markdownText = overrideMarkdown;
             const firstHeading = extractFirstHeadingText(markdownText);
@@ -467,7 +449,7 @@ const DisplayReadme = ({
                             }
 
                             const folders = foldersResponse.data
-                                .filter((item) => item.type === 'dir' && shouldIncludeFolder(item));
+                                .filter((item) => item.type === 'dir' && shouldIncludeFolderInList(item, githubLogin));
 
                             const foldersWithSubtitles = await fetchFolderSubtitles(folders, path);
 
@@ -486,7 +468,7 @@ const DisplayReadme = ({
         } else {
             setError('No path or filename provided');
         }
-    }, [path, filename, overrideMarkdown]);
+    }, [path, filename, overrideMarkdown, githubLogin]);
 
     const splitSections = (markdownText) => {
         const lines = markdownText.split('\n');

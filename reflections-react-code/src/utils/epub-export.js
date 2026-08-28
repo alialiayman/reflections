@@ -4,6 +4,11 @@ import JSZip from "jszip";
 import { marked } from "marked";
 import { GITHUB } from "../constants";
 import { addH2SequencesToSections } from "./markdown-section-h2";
+import {
+  isPathAccessible,
+  shouldIncludeFolderInList,
+  sortFoldersForDisplay,
+} from "./private-folder-access";
 
 const FOLDER_LIST_TOKEN_DETECT_REGEX = /\{\{\s*folderList\s*\}\}/i;
 const FOLDER_LIST_TOKEN_REPLACE_REGEX = /\{\{\s*folderList\s*\}\}/gi;
@@ -12,7 +17,6 @@ const REPO_CONTENTS_API_BASE =
 const FOLDER_LIST_FALLBACK = "⚠️ تعذر تحميل قائمة المجلدات من GitHub حالياً.";
 const FOLDER_SUBTITLE_TOKEN = "[[FOLDER_SUBTITLE]]";
 const FOLDER_SUBTITLE_TOKEN_REGEX_GLOBAL = /\[\[\s*FOLDER_SUBTITLE\s*\]\]?/gi;
-const EXCLUDED_FOLDER_NAMES = new Set(["reflections-react-code"]);
 
 const CONTAINER_XML = `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -477,34 +481,8 @@ const toEncodedRepoPath = (path = "") => {
   return segments.map((segment) => encodeURIComponent(segment)).join("/");
 };
 
-const getLeadingNumber = (name = "") => {
-  const match = name.match(/^\s*(\d+)/);
-  return match ? Number.parseInt(match[1], 10) : Number.POSITIVE_INFINITY;
-};
-
-const sortFoldersNumerically = (folders) =>
-  [...folders].sort((a, b) => {
-    const aNumber = getLeadingNumber(a.name);
-    const bNumber = getLeadingNumber(b.name);
-    if (aNumber !== bNumber) {
-      return aNumber - bNumber;
-    }
-    return a.name.localeCompare(b.name, undefined, {
-      numeric: true,
-      sensitivity: "base",
-    });
-  });
-
-const shouldIncludeFolder = (folder) => {
-  if (!folder || typeof folder.name !== "string") {
-    return false;
-  }
-  const folderName = folder.name.trim();
-  if (!folderName || folderName.startsWith(".")) {
-    return false;
-  }
-  return !EXCLUDED_FOLDER_NAMES.has(folderName);
-};
+const shouldIncludeFolder = (folder, githubLogin = "") =>
+  shouldIncludeFolderInList(folder, githubLogin);
 
 const isSupportedImage = (item) =>
   item?.type === "file" && /\.(?:gif|jpe?g|png|svg|webp)$/i.test(item.name || "");
@@ -529,10 +507,10 @@ const fetchFolderContents = async (path) => {
   return contents;
 };
 
-const collectDescendantPages = async (parentPath, knownContents = null) => {
+const collectDescendantPages = async (parentPath, knownContents = null, githubLogin = "") => {
   const contents = knownContents || (await fetchFolderContents(parentPath));
-  const childFolders = sortFoldersNumerically(
-    contents.filter((item) => item.type === "dir" && shouldIncludeFolder(item))
+  const childFolders = sortFoldersForDisplay(
+    contents.filter((item) => item.type === "dir" && shouldIncludeFolder(item, githubLogin))
   );
   const pages = [];
 
@@ -554,7 +532,7 @@ const collectDescendantPages = async (parentPath, knownContents = null) => {
       });
     }
 
-    pages.push(...(await collectDescendantPages(childPath, childContents)));
+    pages.push(...(await collectDescendantPages(childPath, childContents, githubLogin)));
   }
 
   return pages;
@@ -621,7 +599,7 @@ const fetchFolderSubtitles = async (folders, currentPath) => {
 };
 
 const buildFolderTableMarkdown = (folders, currentPath) => {
-  const links = sortFoldersNumerically(folders).map((folder) => {
+  const links = sortFoldersForDisplay(folders).map((folder) => {
     const title = `[${toDisplayTitle(folder.name)}](${buildFolderUrl(
       currentPath,
       folder.name
@@ -659,7 +637,7 @@ const replaceFolderListWithFallback = (markdownText) => {
   return markdownText.replace(FOLDER_LIST_TOKEN_REPLACE_REGEX, FOLDER_LIST_FALLBACK);
 };
 
-const expandFolderListToken = async (markdownText, path) => {
+const expandFolderListToken = async (markdownText, path, githubLogin = "") => {
   if (!hasFolderListToken(markdownText)) {
     return markdownText;
   }
@@ -677,7 +655,7 @@ const expandFolderListToken = async (markdownText, path) => {
       return replaceFolderListWithFallback(markdownText);
     }
     const folders = data.filter(
-      (item) => item.type === "dir" && shouldIncludeFolder(item)
+      (item) => item.type === "dir" && shouldIncludeFolder(item, githubLogin)
     );
     const foldersWithSubtitles = await fetchFolderSubtitles(folders, path);
     return replaceFolderListToken(markdownText, foldersWithSubtitles, path);
@@ -707,7 +685,11 @@ const normalizeFolderTableHtml = (html) => {
   return out;
 };
 
-const fetchMarkdown = async (path) => {
+const fetchMarkdown = async (path, githubLogin = "") => {
+  if (!isPathAccessible(path, githubLogin)) {
+    throw new Error("Unable to fetch markdown for EPUB export");
+  }
+
   const normalizedPath = path === "/" ? "" : path;
   const readmeUrl = `${GITHUB}${normalizedPath.endsWith("/") ? normalizedPath : `${normalizedPath}/`}README.md`;
   if (shouldUseTranslatedMarkdown()) {
@@ -732,7 +714,7 @@ const fetchMarkdown = async (path) => {
   }
 
   const markdownText = await response.text();
-  return expandFolderListToken(markdownText, normalizedPath);
+  return expandFolderListToken(markdownText, normalizedPath, githubLogin);
 };
 
 const resolveDefaultTitleFromPath = (path = "") =>
@@ -764,11 +746,12 @@ export const buildEpubLikePreview = async ({
   sectionImageMiddleRatio,
   sourceMarkdown,
   imageCaptionMap,
+  githubLogin = "",
 }) => {
   const markdown =
     typeof sourceMarkdown === "string" && sourceMarkdown.trim()
       ? sourceMarkdown
-      : await fetchMarkdown(path);
+      : await fetchMarkdown(path, githubLogin);
   const sections = addH2SequencesToSections(splitMarkdownSections(markdown));
   const firstHeaderTitle = extractFirstMarkdownHeader(markdown);
   const resolvedSectionImageMiddleRatio = resolveSectionImageMiddleRatio(
@@ -876,12 +859,17 @@ export const exportFolderToEpub = async ({
   sourceMarkdown,
   language,
   imageCaptionMap,
+  githubLogin = "",
 }) => {
+  if (!isPathAccessible(path, githubLogin)) {
+    throw new Error("Unable to export this folder.");
+  }
+
   const rootMarkdown =
     typeof sourceMarkdown === "string" && sourceMarkdown.trim()
-      ? await expandFolderListToken(sourceMarkdown, path)
-      : await fetchMarkdown(path);
-  const descendantPages = await collectDescendantPages(path);
+      ? await expandFolderListToken(sourceMarkdown, path, githubLogin)
+      : await fetchMarkdown(path, githubLogin);
+  const descendantPages = await collectDescendantPages(path, null, githubLogin);
   const pages = [
     { path, markdown: rootMarkdown, images: Array.isArray(images) ? images : [] },
     ...descendantPages,
@@ -1242,9 +1230,16 @@ export const exportFolderToEpub = async ({
   saveAs(epubBlob, `${slugify(fileNameBase)}-${exportedAt}.epub`);
 };
 
-export const fetchReadmeMarkdownForRendering = async ({ path, sourceMarkdown }) => {
+export const fetchReadmeMarkdownForRendering = async ({
+  path,
+  sourceMarkdown,
+  githubLogin = "",
+}) => {
+  if (!isPathAccessible(path, githubLogin)) {
+    throw new Error("Unable to fetch markdown for this path.");
+  }
   if (typeof sourceMarkdown === "string" && sourceMarkdown.trim()) {
     return sourceMarkdown;
   }
-  return fetchMarkdown(path);
+  return fetchMarkdown(path, githubLogin);
 };
